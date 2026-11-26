@@ -3466,6 +3466,15 @@ const R = [
 ["Menus, buttons and game controls are translated. Lessons are translated. Opening names, puzzle themes and some labels stay in English.","Los men\u00fas, botones y controles de juego est\u00e1n traducidos. Las lecciones tambi\u00e9n. Los nombres de aperturas, los temas de problemas y algunas etiquetas siguen en ingl\u00e9s.","Les menus, boutons et commandes de jeu sont traduits. Les le\u00e7ons aussi. Les noms d'ouvertures, les th\u00e8mes de probl\u00e8mes et quelques libell\u00e9s restent en anglais.","Men\u00fcs, Schaltfl\u00e4chen und Spielsteuerung sind \u00fcbersetzt. Lektionen ebenfalls. Er\u00f6ffnungsnamen, Aufgabenthemen und einige Beschriftungen bleiben englisch.","Menus, bot\u00f5es e controlos de jogo est\u00e3o traduzidos. As li\u00e7\u00f5es tamb\u00e9m. Nomes de aberturas, temas de problemas e algumas etiquetas continuam em ingl\u00eas.","Menu, pulsanti e comandi di gioco sono tradotti. Anche le lezioni. Nomi delle aperture, temi dei problemi e alcune etichette restano in inglese."],
 ["Everything is stored in this browser.","Todo se guarda en este navegador.","Tout est enregistr\u00e9 dans ce navigateur.","Alles wird in diesem Browser gespeichert.","Tudo \u00e9 guardado neste navegador.","Tutto \u00e8 salvato in questo browser."],
 ["Each player keeps their own games.","Cada jugador conserva sus partidas.","Chaque joueur garde ses parties.","Jeder Spieler beh\u00e4lt seine Partien.","Cada jogador guarda as suas partidas.","Ogni giocatore conserva le proprie partite."],
+['Create invite link', 'Crear enlace de invitaci\u00f3n', "Cr\u00e9er un lien d'invitation", 'Einladungslink erstellen', 'Criar link de convite', 'Crea link di invito'],
+['Paste reply code', 'Pegar c\u00f3digo de respuesta', 'Coller le code de r\u00e9ponse', 'Antwortcode einf\u00fcgen', 'Colar c\u00f3digo de resposta', 'Incolla codice di risposta'],
+['Connect', 'Conectar', 'Connecter', 'Verbinden', 'Ligar', 'Connetti'],
+['It connects by itself as soon as the code is pasted.', 'Se conecta solo en cuanto pegas el c\u00f3digo.', 'La connexion se fait toute seule d\u00e8s que le code est coll\u00e9.', 'Die Verbindung startet von selbst, sobald der Code eingef\u00fcgt ist.', 'Liga-se sozinho assim que colar o c\u00f3digo.', 'Si connette da solo non appena incolli il codice.'],
+['Paste the invite link or code your friend sent you', 'Pega el enlace o c\u00f3digo de invitaci\u00f3n que te envi\u00f3 tu amigo', "Collez le lien ou le code d'invitation envoy\u00e9 par votre ami", 'F\u00fcge den Einladungslink oder -code deines Freundes ein', 'Cole o link ou c\u00f3digo de convite que o seu amigo enviou', 'Incolla il link o il codice di invito inviato dal tuo amico'],
+['1. Send this invite link to your friend', '1. Env\u00eda este enlace de invitaci\u00f3n a tu amigo', '1. Envoyez ce lien d\u2019invitation \u00e0 votre ami', '1. Schick diesen Einladungslink an deinen Freund', '1. Envie este link de convite ao seu amigo', '1. Invia questo link di invito al tuo amico'],
+['2. Paste the reply code they send back', '2. Pega el c\u00f3digo de respuesta que te devuelva', '2. Collez le code de r\u00e9ponse qu\u2019il vous renvoie', '2. F\u00fcge den Antwortcode ein, den er zur\u00fcckschickt', '2. Cole o c\u00f3digo de resposta que ele devolver', '2. Incolla il codice di risposta che ti rimanda'],
+['Send this reply code back to your friend', 'Env\u00eda este c\u00f3digo de respuesta a tu amigo', 'Renvoyez ce code de r\u00e9ponse \u00e0 votre ami', 'Schick diesen Antwortcode an deinen Freund zur\u00fcck', 'Envie este c\u00f3digo de resposta ao seu amigo', 'Rimanda questo codice di risposta al tuo amico'],
+['Keep this page open. The game starts as soon as your friend pastes your reply.', 'Mant\u00e9n esta p\u00e1gina abierta. La partida empieza en cuanto tu amigo pegue tu respuesta.', "Gardez cette page ouverte. La partie commence d\u00e8s que votre ami colle votre r\u00e9ponse.", 'Lass diese Seite ge\u00f6ffnet. Die Partie beginnt, sobald dein Freund deine Antwort einf\u00fcgt.', 'Mantenha esta p\u00e1gina aberta. A partida come\u00e7a assim que o seu amigo colar a sua resposta.', 'Tieni aperta questa pagina. La partita inizia appena il tuo amico incolla la tua risposta.'],
 ];
 const strip = (x) => x.trim().replace(/^[^\p{L}\d]+/u, '');
 const T = {}; ORDER.forEach((l, i) => { T[l] = new Map(R.map((r) => [strip(r[0]), strip(r[i + 1])])); });
@@ -3635,13 +3644,35 @@ function inflate(o) {
     ...o.c.map((k) => `a=candidate:${k[0]} 1 udp ${k[1]} ${k[2]} ${k[3]} typ ${k[4]}` + (k[5] ? ` raddr ${k[5]} rport ${k[6]}` : '')), ''].join('\r\n');
   return { type: o.t === 0 ? 'offer' : 'answer', sdp };
 }
+
+// Binary codes (RK4): the smallest form. Layout: flags, ufrag, pwd, 32-byte DTLS fingerprint, then up to 3 IP candidates.
+const PRIO = [2130706431, 1694498815, 16777215, 1862270975], TYPES = ['host', 'srflx', 'relay', 'prflx'];
+const ipv4 = (s) => { const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s); return m && m.slice(1).every((x) => +x < 256) ? m.slice(1).map(Number) : null; };
+function ipv6(s) { if (!/^[0-9a-fA-F:]+$/.test(s) || !s.includes(':')) return null; const [a, b = null] = s.split('::'); if (s.split('::').length > 2) return null; const A = a ? a.split(':') : [], B = b ? b.split(':') : []; const miss = 8 - A.length - B.length; if ((b === null && miss !== 0) || miss < 0) return null; const w = [...A, ...Array(b === null ? 0 : miss).fill('0'), ...B]; if (w.length !== 8 || w.some((x) => x.length > 4)) return null; return w.flatMap((x) => { const v = parseInt(x, 16); return [v >> 8, v & 255]; }); }
+function binPack(o) {
+  const cands = o.c.map((k) => ({ k, ti: TYPES.indexOf(k[4]), ip: ipv4(k[2]) || ipv6(k[2]) })).filter((x) => x.ti >= 0 && x.ip).sort((a, b) => (a.ti === 1 ? 0 : a.ti === 0 ? 1 : 2) - (b.ti === 1 ? 0 : b.ti === 0 ? 1 : 2)).slice(0, 3);
+  if (!cands.length) throw new Error('no ip candidates'); const te = new TextEncoder(); const u = te.encode(o.u), pw = te.encode(o.p); if (u.length > 255 || pw.length > 255) throw new Error('long');
+  const out = [o.t | (cands.length << 1), u.length, ...u, pw.length, ...pw, ...unb64(o.f)];
+  for (const { k, ti, ip } of cands) out.push(ti | (ip.length === 16 ? 4 : 0), k[3] >> 8, k[3] & 255, ...ip);
+  return 'RK4.' + b64(Uint8Array.from(out));
+}
+function binUnpack(b) {
+  const td = new TextDecoder(); let i = 0; const f = b[i++], t = f & 1, n = (f >> 1) & 7; const ul = b[i++]; const u = td.decode(b.slice(i, i + ul)); i += ul; const pl = b[i++]; const pw = td.decode(b.slice(i, i + pl)); i += pl;
+  const fp = b.slice(i, i + 32); i += 32; if (fp.length !== 32 || !n) throw new Error('bad code'); const c = [];
+  for (let k = 0; k < n; k++) { const ty = b[i++], port = (b[i++] << 8) | b[i++], v6 = ty & 4, len = v6 ? 16 : 4, raw = b.slice(i, i + len); i += len; if (raw.length !== len) throw new Error('bad code');
+    const ip = v6 ? Array.from({ length: 8 }, (_, j) => ((raw[2 * j] << 8) | raw[2 * j + 1]).toString(16)).join(':') : [...raw].join('.'); const tn = TYPES[ty & 3];
+    c.push([String(k + 1), PRIO[ty & 3] - k, ip, port, tn, ...(tn === 'srflx' || tn === 'prflx' ? ['0.0.0.0', 0] : [])]); }
+  return { t, u, p: pw, f: b64(fp), c };
+}
 async function packDesc(desc, compat) {
+  if (!compat) { try { return binPack(squeeze(desc)); } catch {} }
   if (!compat) { try { const raw = new TextEncoder().encode(JSON.stringify(squeeze(desc))); if (typeof CompressionStream !== 'undefined') { const cs = new CompressionStream('deflate-raw'); const w = cs.writable.getWriter(); w.write(raw); w.close(); return 'RK2.' + b64(new Uint8Array(await new Response(cs.readable).arrayBuffer())); } return 'RK3.' + b64(raw); } catch {} }
   return pack({ v: 1, d: desc.toJSON ? desc.toJSON() : desc });
 }
 async function unpackDesc(code) {
-  const c = String(code).trim().replace(/\s+/g, ''); const m = /^RK([23])\.([A-Za-z0-9_-]+)$/.exec(c);
+  const c = String(code).trim().replace(/\s+/g, ''); const m = /^RK([234])\.([A-Za-z0-9_-]+)$/.exec(c);
   if (!m) return (await unpack(code)).d;
+  if (m[1] === '4') return inflate(binUnpack(unb64(m[2])));
   let bytes = unb64(m[2]); if (m[1] === '2') { const ds = new DecompressionStream('deflate-raw'); const w = ds.writable.getWriter(); w.write(bytes); w.close(); bytes = new Uint8Array(await new Response(ds.readable).arrayBuffer()); }
   return inflate(JSON.parse(new TextDecoder().decode(bytes)));
 }
@@ -3665,20 +3696,22 @@ async function online(root, ctx) {
         wire(pc, dc, { host: true, mine, initial, inc });
         await pc.setLocalDescription(await pc.createOffer()); await gathered(pc);
         const code = await packDesc(pc.localDescription, compat.checked); const link = base() + '#/join/' + code; const ans = h('textarea', { rows: 4, class: 'mono code-box', placeholder: 'Paste your friend\u2019s reply code here', 'aria-label': 'Reply code' });
-        clear(hostOut); hostOut.append(h('div', { class: 'col' }, copyBox('1. Send this invite link to your friend', link, 'Copy invite link'), h('p', { class: 'muted small' }, 'They open it, press Join, and send you a short reply code. (Link not working for them? Send the code alone: ', h('code', { class: 'mono' }, code.slice(0, 12) + '\u2026'), ' \u2014 they can paste it on the Online page.)'), h('strong', null, '2. Paste the reply code they send back'), ans, h('div', null, h('button', { class: 'btn primary', onclick: async () => { try { await pc.setRemoteDescription(await unpackDesc(ans.value)); hostOut.append(h('p', { class: 'muted' }, 'Connecting\u2026')); } catch (e) { toast(e.message, 'error'); } } }, 'Connect'))));
+        let connecting = false; const connect = async () => { if (connecting || !pc) return; connecting = true; try { await pc.setRemoteDescription(await unpackDesc(ans.value)); hostOut.append(h('p', { class: 'muted' }, 'Connecting\u2026')); } catch (e) { connecting = false; toast(e.message, 'error'); } };
+        clear(hostOut); hostOut.append(h('div', { class: 'col' }, copyBox('1. Send this invite link to your friend', link, 'Copy invite link'), h('p', { class: 'muted small' }, 'They open it, press Join, and send you a short reply code. (Link not working for them? Send the code alone: ', h('code', { class: 'mono' }, code.slice(0, 12) + '\u2026'), ' \u2014 they can paste it on the Online page.)'), h('strong', null, '2. Paste the reply code they send back'), ans, h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: async () => { try { const t = await navigator.clipboard.readText(); if (!t) throw new Error('empty'); ans.value = t; connect(); } catch { toast('Paste it into the box instead (long-press or Ctrl+V).', 'info'); ans.focus(); } } }, 'Paste reply code'), h('button', { class: 'btn', onclick: connect }, 'Connect')), h('p', { class: 'muted small' }, 'It connects by itself as soon as the code is pasted.')));
+        ans.addEventListener('input', () => { if (/RK\d\.[A-Za-z0-9_-]{60,}/.test(ans.value.replace(/\s+/g, ''))) connect(); });
       } catch (e) { clear(hostOut); hostOut.append(h('p', { class: 'loss' }, 'Could not create an invite: ' + e.message)); }
     }
     async function join(text) {
       clear(joinOut); try {
         const od = await unpackDesc(text.includes('#/join/') ? text.slice(text.indexOf('#/join/') + 7) : text); close(); pc = new RTCPeerConnection({ iceServers: ICE() }); pc.ondatachannel = (e) => { dc = e.channel; wire(pc, dc, { host: false }); };
         await pc.setRemoteDescription(od); await pc.setLocalDescription(await pc.createAnswer()); await gathered(pc);
-        const code = await packDesc(pc.localDescription, compat.checked); joinOut.append(copyBox('Send this reply code back to your friend', code, 'Copy reply code'), h('p', { class: 'muted' }, 'Keep this page open. The game starts as soon as your friend pastes your reply.'));
+        const code = await packDesc(pc.localDescription, compat.checked); try { navigator.clipboard.writeText(code).catch(() => {}); } catch {} joinOut.append(copyBox('Send this reply code back to your friend', code, 'Copy reply code'), h('p', { class: 'muted' }, 'Keep this page open. The game starts as soon as your friend pastes your reply.'));
       } catch (e) { joinOut.append(h('p', { class: 'loss' }, e.message)); }
     }
-    const joinIn = h('textarea', { rows: 4, class: 'mono code-box', placeholder: 'Paste the invite code your friend sent you', 'aria-label': 'Invite code' });
+    const joinIn = h('textarea', { rows: 4, class: 'mono code-box', placeholder: 'Paste the invite link or code your friend sent you', 'aria-label': 'Invite code' });
     root.append(h('h1', null, 'Play a friend online'), h('p', { class: 'muted' }, 'A direct connection between your two browsers: no server, no account. Send your friend a link, they send a short code back, and you are playing. Friendly games only (not rated).'),
       h('div', { class: 'grid-2' },
-        h('section', { class: 'card' }, h('h2', null, 'Create a game'), h('h3', null, 'You play'), colBox, h('h3', { style: { marginTop: '14px' } }, 'Clock'), tcBox, h('div', { style: { margin: '16px 0' } }, h('button', { class: 'btn primary large', onclick: create }, 'Create invite code')), hostOut),
+        h('section', { class: 'card' }, h('h2', null, 'Create a game'), h('h3', null, 'You play'), colBox, h('h3', { style: { marginTop: '14px' } }, 'Clock'), tcBox, h('div', { style: { margin: '16px 0' } }, h('button', { class: 'btn primary large', onclick: create }, 'Create invite link')), hostOut),
         h('section', { class: 'card' }, h('h2', null, 'Join a game'), joinIn, h('div', { style: { margin: '12px 0' } }, h('button', { class: 'btn primary large', onclick: () => join(joinIn.value) }, 'Join')), joinOut)),
       h('label', { class: 'check small' }, compat, ' Compatibility mode (longer codes; try this if a friend on an unusual browser cannot connect)'), h('p', { class: 'muted small' }, 'Works on most home and mobile networks. A few strict corporate networks block direct connections; if it will not connect, try another network. Both players need this page open.'));
   }
