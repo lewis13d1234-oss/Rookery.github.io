@@ -2788,7 +2788,7 @@ async function settings(root, ctx) {
   const piece = (c, t, set) => { const s = h('span', { class: 'pv' }); s.append(new DOMParser().parseFromString(pieceSvg(c, t, set), 'image/svg+xml').documentElement); return s; };
   const draw = () => { clear(panel); panel.append(
     h('section', { class: 'card' }, h('h2', null, 'Theme'), h('div', { class: 'seg' }, [['dark', '\u263e Dark'], ['light', '\u2600 Light'], ['system', '\ud83d\udda5 System']].map(([v, l]) => h('button', { class: state.prefs.theme === v ? 'active' : '', onclick: () => { setPrefs({ theme: v }); draw(); } }, l)))),
-    h('section', { class: 'card' }, h('h2', null, 'Language'), h('select', { 'aria-label': 'Language', onchange: (e) => setLang(e.target.value) }, Object.entries(languages).map(([k, v]) => h('option', { value: k, selected: k === getLang() }, v))), h('p', { class: 'muted small' }, 'Menus, buttons and game controls are translated. Lessons, opening names and puzzle themes stay in English.')),
+    h('section', { class: 'card' }, h('h2', null, 'Language'), h('select', { 'aria-label': 'Language', onchange: (e) => setLang(e.target.value) }, Object.entries(languages).map(([k, v]) => h('option', { value: k, selected: k === getLang() }, v))), h('p', { class: 'muted small' }, 'Menus, buttons and game controls are translated. Lesson titles are translated; lesson steps, opening names and puzzle themes stay in English.')),
     h('section', { class: 'card' }, h('h2', null, 'Board'), h('div', { class: 'swatches' }, Object.entries(BOARDS).map(([id, [l, d, name]]) => h('button', { class: 'swatch' + (state.prefs.board === id ? ' active' : ''), 'aria-pressed': state.prefs.board === id, onclick: () => { setPrefs({ board: id }); draw(); } }, h('span', { class: 'mini-board', style: { background: `conic-gradient(${l} 25%, ${d} 0 50%, ${l} 0 75%, ${d} 0)`, backgroundSize: '50% 50%' } }), h('span', null, name))))),
     h('section', { class: 'card' }, h('h2', null, 'Pieces'), h('div', { class: 'swatches' }, Object.entries(PIECE_SETS).map(([id, name]) => h('button', { class: 'swatch' + (state.prefs.pieces === id ? ' active' : ''), 'aria-pressed': state.prefs.pieces === id, onclick: () => { setPrefs({ pieces: id }); draw(); } }, h('span', { class: 'piece-prev' }, piece('w', 'n', id), piece('b', 'q', id)), h('span', null, name))))),
     h('section', { class: 'card' }, h('h2', null, 'Display and sound'), toggle('Board coordinates', 'coords'), toggle('Piece animations', 'animations'), toggle('Sound effects', 'sound'), h('button', { class: 'btn small', onclick: () => play('move') }, '\u25b6 Test sound')),
@@ -3273,8 +3273,83 @@ const R = [
 ['Hint', 'Pista', 'Indice', 'Tipp', 'Dica', 'Suggerimento'],
 ['New game', 'Nueva partida', 'Nouvelle partie', 'Neue Partie', 'Nova partida', 'Nuova partita'],
 ['Download PGN', 'Descargar PGN', 'T\u00e9l\u00e9charger le PGN', 'PGN herunterladen', 'Descarregar PGN', 'Scarica PGN'],
+["The board and notation","El tablero y la notaci\u00f3n","L'\u00e9chiquier et la notation","Das Brett und die Notation","O tabuleiro e a nota\u00e7\u00e3o","La scacchiera e la notazione"],
+["Files, ranks, squares and how moves are written.","Columnas, filas, casillas y c\u00f3mo se escriben las jugadas.","Colonnes, rang\u00e9es, cases et fa\u00e7on d'\u00e9crire les coups.","Linien, Reihen, Felder und wie Z\u00fcge geschrieben werden.","Colunas, fileiras, casas e como se escrevem as jogadas.","Colonne, traverse, case e come si scrivono le mosse."],
+["How pawns move","C\u00f3mo se mueven los peones","Le d\u00e9placement des pions","Wie sich Bauern bewegen","Como se movem os pe\u00f5es","Come si muovono i pedoni"],
+["Forward, double-step, and capture diagonally.","Avanzan, dan doble paso y capturan en diagonal.","Avance, double pas et prise en diagonale.","Vorw\u00e4rts, Doppelschritt und diagonal schlagen.","Avan\u00e7am, d\u00e3o passo duplo e capturam na diagonal.","Avanzano, fanno il doppio passo e catturano in diagonale."],
+["The knight","El caballo","Le cavalier","Der Springer","O cavalo","Il cavallo"],
+["The L-shaped jumper that ignores blockers.","El saltador en L que ignora los obst\u00e1culos.","Le sauteur en L qui ignore les obstacles.","Der L-f\u00f6rmige Springer, der Hindernisse ignoriert.","O saltador em L que ignora obst\u00e1culos.","Il saltatore a L che ignora gli ostacoli."],
+["The bishop","El alfil","Le fou","Der L\u00e4ufer","O bispo","L'alfiere"],
+["Diagonal glider \u2014 stays on one colour.","Se desliza en diagonal y no cambia de color.","Glisse en diagonale et reste sur une seule couleur.","Gleitet diagonal und bleibt auf einer Farbe.","Desliza na diagonal e fica sempre na mesma cor.","Scivola in diagonale e resta su un solo colore."],
+["The rook","La torre","La tour","Der Turm","A torre","La torre"],
+["Straight-line power on files and ranks.","Fuerza en l\u00ednea recta por columnas y filas.","Puissance en ligne droite sur les colonnes et les rang\u00e9es.","Geradlinige Kraft auf Linien und Reihen.","For\u00e7a em linha reta por colunas e fileiras.","Potenza in linea retta su colonne e traverse."],
+["The queen","La dama","La dame","Die Dame","A dama","La donna"],
+["Rook plus bishop \u2014 the strongest piece.","Torre m\u00e1s alfil: la pieza m\u00e1s fuerte.","Tour plus fou : la pi\u00e8ce la plus forte.","Turm plus L\u00e4ufer: die st\u00e4rkste Figur.","Torre mais bispo: a pe\u00e7a mais forte.","Torre pi\u00f9 alfiere: il pezzo pi\u00f9 forte."],
+["The king","El rey","Le roi","Der K\u00f6nig","O rei","Il re"],
+["One step at a time \u2014 and never into check.","Un paso cada vez, y nunca hacia un jaque.","Un pas \u00e0 la fois, et jamais en \u00e9chec.","Ein Schritt nach dem anderen, nie ins Schach.","Um passo de cada vez, e nunca para um xeque.","Un passo alla volta, e mai sotto scacco."],
+["Check, checkmate and stalemate","Jaque, jaque mate y ahogado","\u00c9chec, mat et pat","Schach, Matt und Patt","Xeque, xeque-mate e afogamento","Scacco, scacco matto e stallo"],
+["How games end.","C\u00f3mo terminan las partidas.","Comment finissent les parties.","Wie Partien enden.","Como terminam as partidas.","Come finiscono le partite."],
+["Castling","El enroque","Le roque","Rochade","O roque","L'arrocco"],
+["Tuck your king away and activate a rook.","Pon a salvo al rey y activa una torre.","Mettez votre roi \u00e0 l'abri et activez une tour.","Bring den K\u00f6nig in Sicherheit und aktiviere einen Turm.","Ponha o rei a salvo e ative uma torre.","Metti al sicuro il re e attiva una torre."],
+["En passant and promotion","Captura al paso y promoci\u00f3n","La prise en passant et la promotion","En passant und Umwandlung","En passant e promo\u00e7\u00e3o","En passant e promozione"],
+["The two special pawn rules.","Las dos reglas especiales del pe\u00f3n.","Les deux r\u00e8gles sp\u00e9ciales du pion.","Die beiden Sonderregeln der Bauern.","As duas regras especiais do pe\u00e3o.","Le due regole speciali del pedone."],
+["Piece values and trades","Valor de las piezas y cambios","Valeur des pi\u00e8ces et \u00e9changes","Figurenwerte und Abtausch","Valor das pe\u00e7as e trocas","Valore dei pezzi e scambi"],
+["Knowing what is worth what.","Saber lo que vale cada cosa.","Savoir ce que vaut chaque chose.","Wissen, was was wert ist.","Saber quanto vale cada coisa.","Sapere quanto vale ogni cosa."],
+["Spot the loose piece","Detecta la pieza desprotegida","Rep\u00e9rer la pi\u00e8ce non prot\u00e9g\u00e9e","Die ungedeckte Figur erkennen","Detetar a pe\u00e7a desprotegida","Individuare il pezzo indifeso"],
+["The first question: is it defended?","La primera pregunta: \u00bfest\u00e1 defendida?","La premi\u00e8re question : est-elle d\u00e9fendue ?","Die erste Frage: Ist sie gedeckt?","A primeira pergunta: est\u00e1 defendida?","La prima domanda: \u00e8 difeso?"],
+["Forks","Horquillas","Les fourchettes","Gabeln","Garfos","Le forchette"],
+["One piece, two targets.","Una pieza, dos objetivos.","Une pi\u00e8ce, deux cibles.","Eine Figur, zwei Ziele.","Uma pe\u00e7a, dois alvos.","Un pezzo, due bersagli."],
+["Pins","Clavadas","Les clouages","Fesselungen","Cravadas","Le inchiodature"],
+["A piece that cannot move without exposing something bigger.","Una pieza que no puede moverse sin dejar expuesta otra mayor.","Une pi\u00e8ce qui ne peut bouger sans exposer plus grosse qu'elle.","Eine Figur, die sich nicht bewegen kann, ohne Wichtigeres preiszugeben.","Uma pe\u00e7a que n\u00e3o pode mexer-se sem expor outra maior.","Un pezzo che non pu\u00f2 muoversi senza esporne uno pi\u00f9 grande."],
+["Skewers","Ataques en rayos X","Les enfilades","Spie\u00dfe","Espetos","Gli infilzamenti"],
+["A pin in reverse \u2014 the big piece must run.","Una clavada al rev\u00e9s: la pieza grande debe huir.","Un clouage invers\u00e9 : la grosse pi\u00e8ce doit fuir.","Eine umgekehrte Fesselung: Die gro\u00dfe Figur muss weichen.","Uma cravada ao contr\u00e1rio: a pe\u00e7a grande tem de fugir.","Un'inchiodatura al contrario: il pezzo grande deve scappare."],
+["Discovered attacks","Ataques descubiertos","Les attaques \u00e0 la d\u00e9couverte","Abzugsangriffe","Ataques descobertos","Gli attacchi di scoperta"],
+["Move one piece, unleash another.","Mueve una pieza y libera otra.","D\u00e9placez une pi\u00e8ce, lib\u00e9rez-en une autre.","Zieh eine Figur weg und entfessle eine andere.","Mova uma pe\u00e7a e liberte outra.","Muovi un pezzo e libera l'altro."],
+["Checkmate patterns","Patrones de mate","Sch\u00e9mas de mat","Mattmuster","Padr\u00f5es de mate","Schemi di matto"],
+["Back-rank mate","Mate del pasillo","Mat du couloir","Grundreihenmatt","Mate do corredor","Matto del corridoio"],
+["The king trapped behind its own pawns.","El rey atrapado tras sus propios peones.","Le roi enferm\u00e9 derri\u00e8re ses propres pions.","Der K\u00f6nig eingesperrt hinter den eigenen Bauern.","O rei preso atr\u00e1s dos seus pr\u00f3prios pe\u00f5es.","Il re intrappolato dietro ai suoi pedoni."],
+["Smothered mate","Mate ahogado","Mat \u00e9touff\u00e9","Erstickungsmatt","Mate sufocado","Matto affogato"],
+["A knight delivers mate to a boxed-in king.","Un caballo da mate a un rey encerrado.","Un cavalier mate un roi enferm\u00e9.","Ein Springer setzt einen eingeengten K\u00f6nig matt.","Um cavalo d\u00e1 mate a um rei encurralado.","Un cavallo d\u00e0 matto a un re rinchiuso."],
+["The ladder mate","Mate de la escalera","Le mat de l'escalier","Das Leitermatt","O mate da escada","Il matto della scala"],
+["Two rooks chase the king off the board.","Dos torres empujan al rey fuera del tablero.","Deux tours chassent le roi hors de l'\u00e9chiquier.","Zwei T\u00fcrme treiben den K\u00f6nig vom Brett.","Duas torres empurram o rei para fora do tabuleiro.","Due torri spingono il re fuori dalla scacchiera."],
+["Opening theory","Teor\u00eda de aperturas","Th\u00e9orie des ouvertures","Er\u00f6ffnungstheorie","Teoria de aberturas","Teoria delle aperture"],
+["Opening principles","Principios de apertura","Principes d'ouverture","Er\u00f6ffnungsprinzipien","Princ\u00edpios de abertura","Principi di apertura"],
+["Centre, development, king safety.","Centro, desarrollo y seguridad del rey.","Centre, d\u00e9veloppement, s\u00e9curit\u00e9 du roi.","Zentrum, Entwicklung, K\u00f6nigssicherheit.","Centro, desenvolvimento, seguran\u00e7a do rei.","Centro, sviluppo, sicurezza del re."],
+["Strategy","Estrategia","Strat\u00e9gie","Strategie","Estrat\u00e9gia","Strategia"],
+["Controlling the centre","Controlar el centro","Contr\u00f4ler le centre","Das Zentrum kontrollieren","Controlar o centro","Controllare il centro"],
+["Why d4, e4, d5, e5 matter.","Por qu\u00e9 importan d4, e4, d5 y e5.","Pourquoi d4, e4, d5 et e5 comptent.","Warum d4, e4, d5 und e5 wichtig sind.","Porque importam d4, e4, d5 e e5.","Perch\u00e9 contano d4, e4, d5 ed e5."],
+["Pawn structure basics","Fundamentos de la estructura de peones","Bases de la structure de pions","Grundlagen der Bauernstruktur","No\u00e7\u00f5es de estrutura de pe\u00f5es","Basi della struttura pedonale"],
+["Isolated, doubled, backward and passed pawns.","Peones aislados, doblados, retrasados y pasados.","Pions isol\u00e9s, doubl\u00e9s, arri\u00e9r\u00e9s et pass\u00e9s.","Isolierte, Doppel-, r\u00fcckst\u00e4ndige und Freibauern.","Pe\u00f5es isolados, dobrados, atrasados e passados.","Pedoni isolati, doppiati, arretrati e passati."],
+["King safety","Seguridad del rey","S\u00e9curit\u00e9 du roi","K\u00f6nigssicherheit","Seguran\u00e7a do rei","Sicurezza del re"],
+["Why you castle and keep the pawn shield.","Por qu\u00e9 enrocar y mantener el escudo de peones.","Pourquoi roquer et garder le bouclier de pions.","Warum man rochiert und die Bauernkette beh\u00e4lt.","Porque se faz roque e se mant\u00e9m o escudo de pe\u00f5es.","Perch\u00e9 si arrocca e si mantiene lo scudo di pedoni."],
+["Outposts and good bishops","Puestos avanzados y buenos alfiles","Avant-postes et bons fous","Vorposten und gute L\u00e4ufer","Postos avan\u00e7ados e bons bispos","Avamposti e buoni alfieri"],
+["Knights on strong squares, bishops with scope.","Caballos en casillas fuertes, alfiles con campo de acci\u00f3n.","Cavaliers sur de bonnes cases, fous avec de l'espace.","Springer auf starken Feldern, L\u00e4ufer mit Spielraum.","Cavalos em casas fortes, bispos com espa\u00e7o.","Cavalli su case forti, alfieri con spazio."],
+["Open files and the seventh rank","Columnas abiertas y la s\u00e9ptima fila","Colonnes ouvertes et septi\u00e8me rang\u00e9e","Offene Linien und die siebte Reihe","Colunas abertas e a s\u00e9tima fileira","Colonne aperte e la settima traversa"],
+["Put the rooks to work.","Pon las torres a trabajar.","Mettez les tours au travail.","Setze die T\u00fcrme ein.","Ponha as torres a trabalhar.","Metti al lavoro le torri."],
+["The rule of the square","La regla del cuadrado","La r\u00e8gle du carr\u00e9","Die Quadratregel","A regra do quadrado","La regola del quadrato"],
+["Can the king catch the pawn?","\u00bfPuede el rey alcanzar al pe\u00f3n?","Le roi peut-il rattraper le pion ?","Kann der K\u00f6nig den Bauern einholen?","Pode o rei apanhar o pe\u00e3o?","Il re pu\u00f2 raggiungere il pedone?"],
+["Opposition","Oposici\u00f3n","L'opposition","Opposition","Oposi\u00e7\u00e3o","Opposizione"],
+["The key idea in king-and-pawn endings.","La idea clave en los finales de rey y peones.","L'id\u00e9e cl\u00e9 des finales de roi et pions.","Die Schl\u00fcsselidee in Bauernendspielen.","A ideia-chave nos finais de rei e pe\u00f5es.","L'idea chiave nei finali di re e pedoni."],
+["Mate with king and queen","Mate con rey y dama","Mat avec roi et dame","Matt mit K\u00f6nig und Dame","Mate com rei e dama","Matto con re e donna"],
+["Never stalemate \u2014 drive the king to the edge.","Nunca des ahogado: lleva al rey al borde.","\u00c9vitez le pat : poussez le roi au bord.","Kein Patt: Treibe den K\u00f6nig an den Rand.","Nunca afogue: leve o rei at\u00e9 \u00e0 borda.","Mai stallo: porta il re al bordo."],
+["Mate with king and rook","Mate con rey y torre","Mat avec roi et tour","Matt mit K\u00f6nig und Turm","Mate com rei e torre","Matto con re e torre"],
+["Cut off, box in, mate.","Corta, encierra y da mate.","Couper, enfermer, mater.","Abschneiden, einengen, matt.","Cortar, encurralar, dar mate.","Tagliare, rinchiudere, dare matto."],
+["Italian Game: the quiet plan","Partida italiana: el plan tranquilo","Partie italienne : le plan tranquille","Italienische Partie: der ruhige Plan","Jogo Italiano: o plano tranquilo","Partita Italiana: il piano tranquillo"],
+["A classical line with a clear idea.","Una l\u00ednea cl\u00e1sica con una idea clara.","Une ligne classique avec une id\u00e9e claire.","Eine klassische Variante mit klarer Idee.","Uma linha cl\u00e1ssica com uma ideia clara.","Una linea classica con un'idea chiara."],
+["Ruy Lopez: the main line","Ruy L\u00f3pez: la l\u00ednea principal","Ruy Lopez : la ligne principale","Spanische Partie: die Hauptvariante","Ruy Lopez: a linha principal","Ruy Lopez: la linea principale"],
+["Pressure on e5 and a long strategic fight.","Presi\u00f3n sobre e5 y una larga lucha estrat\u00e9gica.","Pression sur e5 et longue lutte strat\u00e9gique.","Druck auf e5 und ein langer strategischer Kampf.","Press\u00e3o sobre e5 e uma longa luta estrat\u00e9gica.","Pressione su e5 e una lunga lotta strategica."],
+["The Sicilian: Najdorf","La Siciliana: Najdorf","La Sicilienne : Najdorf","Die Sizilianische: Najdorf","A Siciliana: Najdorf","La Siciliana: Najdorf"],
+["Black's sharpest, most flexible defence.","La defensa m\u00e1s aguda y flexible de las negras.","La d\u00e9fense la plus tranchante et la plus souple des Noirs.","Schwarz' sch\u00e4rfste und flexibelste Verteidigung.","A defesa mais aguda e flex\u00edvel das pretas.","La difesa pi\u00f9 tagliente e flessibile del Nero."],
+["The London System","El Sistema Londres","Le syst\u00e8me de Londres","Das London-System","O Sistema Londres","Il Sistema Londra"],
+["A solid setup for White.","Un montaje s\u00f3lido para las blancas.","Une mise en place solide pour les Blancs.","Ein solider Aufbau f\u00fcr Wei\u00df.","Uma montagem s\u00f3lida para as brancas.","Un assetto solido per il Bianco."],
+["The Queen's Gambit Declined","El Gambito de Dama Rehusado","Le gambit dame refus\u00e9","Das abgelehnte Damengambit","O Gambito da Dama Recusado","Il Gambetto di Donna Rifiutato"],
+["A classical centre-fight.","Una lucha cl\u00e1sica por el centro.","Une lutte classique pour le centre.","Ein klassischer Kampf ums Zentrum.","Uma luta cl\u00e1ssica pelo centro.","Una classica lotta per il centro."],
+['Saved on this device in this browser', 'Guardado en este dispositivo y navegador', 'Enregistr\u00e9 sur cet appareil, dans ce navigateur', 'Auf diesem Ger\u00e4t in diesem Browser gespeichert', 'Guardado neste dispositivo e navegador', 'Salvato su questo dispositivo in questo browser'],
 ];
 const T = {}; ORDER.forEach((l, i) => { T[l] = new Map(R.map((r) => [r[0].trim(), r[i + 1]])); });
+const PAT = { // [steps, step, min, progress-fn]
+  es: ['pasos', 'paso', 'min', (a, b) => `Tu progreso: ${a} de ${b} lecciones`], fr: ['\u00e9tapes', '\u00e9tape', 'min', (a, b) => `Votre progression : ${a} sur ${b} le\u00e7ons`],
+  de: ['Schritte', 'Schritt', 'Min.', (a, b) => `Dein Fortschritt: ${a} von ${b} Lektionen`], pt: ['passos', 'passo', 'min', (a, b) => `O seu progresso: ${a} de ${b} li\u00e7\u00f5es`], it: ['passi', 'passo', 'min', (a, b) => `I tuoi progressi: ${a} di ${b} lezioni`] };
 const languages = LANGS;
 function getLang() { try { const l = localStorage.getItem('rk_lang'); if (l && LANGS[l]) return l; } catch {} const n = (navigator.language || 'en').slice(0, 2); return T[n] ? n : 'en'; }
 function setLang(l) { try { localStorage.setItem('rk_lang', l); } catch {} location.reload(); }
@@ -3283,7 +3358,9 @@ const ATTRS = ['placeholder', 'aria-label', 'title'];
 const lead = /^([^\p{L}\d]*)([\s\S]*?)(\s*)$/u;
 function startI18n(root) {
   const lang = getLang(); document.documentElement.lang = lang; if (lang === 'en') return; const map = T[lang];
-  const tr = (s) => { const m = lead.exec(s); if (!m || !m[2]) return null; const t = map.get(m[2]); return t == null ? null : m[1] + t + m[3]; };
+  const P = PAT[lang];
+  const tr = (s) => { const m = lead.exec(s); if (!m || !m[2]) return null; let t = map.get(m[2]);
+    if (t == null) { let q = /^(\d+) (steps?) \u00b7 (\d+) min$/.exec(m[2]); if (q) t = `${q[1]} ${q[1] === '1' ? P[1] : P[0]} \u00b7 ${q[3]} ${P[2]}`; else if ((q = /^Your progress: (\d+) of (\d+) lessons$/.exec(m[2]))) t = P[3](q[1], q[2]); } return t == null ? null : m[1] + t + m[3]; };
   const pass = (node) => {
     const w = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
     while (w.nextNode()) { const t = w.currentNode; if (SKIP.has(t.parentNode?.nodeName?.toUpperCase())) continue; const r = tr(t.nodeValue); if (r != null) t.nodeValue = r; }
