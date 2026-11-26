@@ -2953,6 +2953,19 @@ const { LEVELS } = __req("shared/engine.js");
 
 const GLYPH = { king: '\u265a', queen: '\u265b', rook: '\u265c', bishop: '\u265d', knight: '\u265e', pawn: '\u265f\ufe0e' };
 const flag = (cc) => (/^[A-Za-z]{2}$/.test(cc || '') ? String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 127397 + c.charCodeAt(0))) : '');
+// Read an image file, centre-crop to a square and shrink to 160px so it stays small in localStorage.
+async function photoFromFile(f) {
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(f.type)) throw new Error('Choose a PNG, JPEG, WebP or GIF image.');
+  if (f.size > 12 * 1024 * 1024) throw new Error('That image is too large (12 MB maximum).');
+  const url = URL.createObjectURL(f);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('That image could not be read.')); i.src = url; });
+    const side = Math.min(img.naturalWidth, img.naturalHeight); if (!side) throw new Error('That image could not be read.');
+    const c = document.createElement('canvas'); c.width = c.height = 160; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 160, 160);
+    g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 160, 160);
+    return c.toDataURL('image/jpeg', 0.85);
+  } finally { URL.revokeObjectURL(url); }
+}
 function ratingChart() {
   let d = {}; try { d = JSON.parse(localStorage.getItem('rk_pz2') || '{}'); } catch {}
   const pts = (d.hist || []).map((x) => x.rating); if (pts.length < 2) return h('p', { class: 'muted' }, 'Solve a few rated puzzles to see your rating curve.');
@@ -2968,7 +2981,8 @@ async function profilePage(root, ctx) {
     clear(box); const p = activeProfile(); const st = peek(p.id); const got = earned();
     const name = h('input', { value: p.name, maxLength: 20, 'aria-label': 'Display name' }), bio = h('textarea', { rows: 3, maxLength: 160, placeholder: 'Tell people about your chess\u2026' }), country = h('input', { value: p.country || '', maxLength: 2, placeholder: 'GB', 'aria-label': 'Country code', style: { width: '5em', textTransform: 'uppercase' } });
     bio.value = p.bio || '';
-    const avRow = h('div', { class: 'row' }, AVATARS.map((a) => h('button', { class: 'btn' + (p.avatar === a ? ' primary' : ''), 'aria-label': 'Avatar ' + a, 'aria-pressed': p.avatar === a, style: { fontSize: '1.4rem', lineHeight: 1, padding: '6px 12px' }, onclick: () => { updateProfile(p.id, { avatar: a }); draw(); } }, GLYPH[a])));
+    const avRow = h('div', { class: 'row' }, AVATARS.map((a) => h('button', { class: 'btn' + (p.avatar === a ? ' primary' : ''), 'aria-label': 'Avatar ' + a, 'aria-pressed': p.avatar === a, style: { fontSize: '1.4rem', lineHeight: 1, padding: '6px 12px' }, onclick: () => { updateProfile(p.id, { avatar: a, photo: '' }); document.dispatchEvent(new Event('rk-profile')); draw(); } }, GLYPH[a])));
+    const photoRow = h('div', { class: 'row' }, h('button', { class: 'btn', onclick: async () => { const f = await pickFile('image/png,image/jpeg,image/webp,image/gif'); if (!f) return; try { updateProfile(p.id, { photo: await photoFromFile(f) }); toast('Photo updated', 'success'); document.dispatchEvent(new Event('rk-profile')); draw(); } catch (e) { toast(e.message, 'error'); } } }, '\u2b06 Upload photo'), p.photo ? h('button', { class: 'btn ghost', onclick: () => { updateProfile(p.id, { photo: '' }); document.dispatchEvent(new Event('rk-profile')); draw(); } }, 'Remove photo') : null, h('span', { class: 'muted small' }, 'Stays on this device. It is cropped to a square and shrunk.'));
     box.append(
       h('section', { class: 'card profile-head' }, avatar(asUser(p), 84), h('div', { class: 'grow' },
         h('h1', { class: 'profile-name' }, p.name, ' ', h('span', { title: p.country }, flag(p.country))), h('p', { class: p.bio ? '' : 'muted' }, p.bio || 'No bio yet.'),
@@ -2976,7 +2990,7 @@ async function profilePage(root, ctx) {
       h('section', { class: 'grid-4' }, [['Games', st.games], ['Puzzle rating', st.rating], ['Puzzles solved', st.solved], ['Achievements', got.length + '/' + ACH.length]].map(([t, v]) => h('div', { class: 'card stat' }, h('div', { class: 'muted small' }, t), h('div', { class: 'big' }, v)))),
       h('section', { class: 'card' }, h('h2', null, 'Puzzle rating'), ratingChart()),
       h('section', { class: 'card' }, h('h2', null, 'Achievements'), h('div', { class: 'ach-grid' }, ACH.filter((a) => got.includes(a[0])).map(([id, ic, n, d]) => h('div', { class: 'ach', title: d }, h('span', { class: 'ach-icon' }, ic), h('span', null, n))), got.length ? null : h('span', { class: 'muted' }, 'Play, solve puzzles and finish lessons to earn them. '), h('a', { href: '#/me' }, 'See all'))),
-      h('section', { class: 'card' }, h('h2', null, 'Edit profile'), h('div', { class: 'field' }, h('span', null, 'Avatar'), avRow), h('label', { class: 'field' }, h('span', null, 'Display name (2\u201320 characters)'), name), h('label', { class: 'field' }, h('span', null, 'Bio'), bio), h('label', { class: 'field' }, h('span', null, 'Country code (2 letters, optional)'), country),
+      h('section', { class: 'card' }, h('h2', null, 'Edit profile'), h('div', { class: 'field' }, h('span', null, 'Avatar'), avRow, photoRow), h('label', { class: 'field' }, h('span', null, 'Display name (2\u201320 characters)'), name), h('label', { class: 'field' }, h('span', null, 'Bio'), bio), h('label', { class: 'field' }, h('span', null, 'Country code (2 letters, optional)'), country),
         h('button', { class: 'btn primary', onclick: () => { const n = name.value.trim(); if (n.length < 2) return toast('Choose a name with at least 2 characters', 'error'); updateProfile(p.id, { name: n, bio: bio.value.trim(), country: country.value.trim().toUpperCase() }); toast('Profile saved', 'success'); document.dispatchEvent(new Event('rk-profile')); draw(); } }, 'Save profile')),
       h('section', { class: 'card' }, h('div', { class: 'row' }, h('h2', { class: 'grow' }, 'Players on this device'), h('button', { class: 'btn small primary', onclick: async () => { const n = await promptBox('New profile', 'Name for the new player', { okLabel: 'Create' }); if (n == null) return; const id = addProfile(n.trim().slice(0, 20)); switchProfile(id); location.reload(); } }, '+ Add player')),
         h('p', { class: 'muted small' }, 'Each player keeps their own games, puzzle rating, lesson progress and repertoires.'),
@@ -3007,10 +3021,10 @@ function initProfiles() {
   Storage.prototype.getItem = function (k) { return rawGet.call(this, this === localStorage ? keyFor(k) : k); };
   Storage.prototype.setItem = function (k, v) { return rawSet.call(this, this === localStorage ? keyFor(k) : k, v); };
   Storage.prototype.removeItem = function (k) { return rawDel.call(this, this === localStorage ? keyFor(k) : k); };
-  window.__rkName = () => activeProfile().name; window.__rkUser = () => { const p = activeProfile(); return { username: p.name, avatar: 'preset:' + p.avatar }; };
+  window.__rkName = () => activeProfile().name; window.__rkUser = () => { const p = activeProfile(); return { username: p.name, avatar: p.photo || 'preset:' + p.avatar }; };
 }
 const profiles = () => list.slice(); const activeProfile = () => list.find((p) => p.id === active) || list[0]; const AVATARS = AV;
-const asUser = (p) => ({ username: p.name, avatar: 'preset:' + p.avatar });
+const asUser = (p) => ({ username: p.name, avatar: p.photo || 'preset:' + p.avatar });
 function updateProfile(id, patch) { const p = list.find((x) => x.id === id); if (!p) return; Object.assign(p, patch); write(); }
 function addProfile(name) { const id = 'p' + Date.now().toString(36); list.push({ id, name: name || 'Player ' + (list.length + 1), avatar: AV[list.length % AV.length], bio: '', country: '', created: Date.now() }); write(); return id; }
 function switchProfile(id) { if (list.some((p) => p.id === id)) { active = id; write(); } }
@@ -3383,6 +3397,10 @@ const R = [
 ['Checkmate patterns', 'Patrones de mate', 'Sch\u00e9mas de mat', 'Mattmuster', 'Padr\u00f5es de mate', 'Schemi di matto'],
 ['Opening theory', 'Teor\u00eda de aperturas', 'Th\u00e9orie des ouvertures', 'Er\u00f6ffnungstheorie', 'Teoria de aberturas', 'Teoria delle aperture'],
 ['The Opera Game, Paris 1858 \u2014 Morphy vs. Duke of Brunswick & Count Isouard', 'La Partida de la \u00d3pera, Par\u00eds 1858: Morphy contra el duque de Brunswick y el conde Isouard', "La Partie de l'Op\u00e9ra, Paris 1858 : Morphy contre le duc de Brunswick et le comte Isouard", 'Die Opernpartie, Paris 1858: Morphy gegen Herzog von Braunschweig und Graf Isouard', 'A Partida da \u00d3pera, Paris 1858: Morphy contra o duque de Brunswick e o conde Isouard', "La Partita dell'Opera, Parigi 1858: Morphy contro il duca di Brunswick e il conte Isouard"],
+['\u2b06 Upload photo', '\u2b06 Subir foto', '\u2b06 T\u00e9l\u00e9verser une photo', '\u2b06 Foto hochladen', '\u2b06 Carregar foto', '\u2b06 Carica foto'],
+['Remove photo', 'Quitar foto', 'Retirer la photo', 'Foto entfernen', 'Remover foto', 'Rimuovi foto'],
+['Stays on this device. It is cropped to a square and shrunk.', 'Se queda en este dispositivo. Se recorta en cuadrado y se reduce.', 'Reste sur cet appareil. Elle est recadr\u00e9e en carr\u00e9 et r\u00e9duite.', 'Bleibt auf diesem Ger\u00e4t. Sie wird quadratisch zugeschnitten und verkleinert.', 'Fica neste dispositivo. \u00c9 recortada em quadrado e reduzida.', 'Resta su questo dispositivo. Viene ritagliata in quadrato e ridotta.'],
+['Photo updated', 'Foto actualizada', 'Photo mise \u00e0 jour', 'Foto aktualisiert', 'Foto atualizada', 'Foto aggiornata'],
 ];
 const strip = (x) => x.trim().replace(/^[^\p{L}\d]+/u, '');
 const T = {}; ORDER.forEach((l, i) => { T[l] = new Map(R.map((r) => [strip(r[0]), strip(r[i + 1])])); });
