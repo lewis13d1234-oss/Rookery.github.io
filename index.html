@@ -180,6 +180,7 @@ body.menu-open .scrim { display: block; position: fixed; inset: 0; background: r
 @media (max-width: 420px) { .board-col { min-width: 0; } }
 h1, h2, h3, .lead { overflow-wrap: break-word; hyphens: auto; } .hero-actions { flex-wrap: wrap; } .hero > * { min-width: 0; }
 @media (max-width: 420px) { .btn { white-space: normal; text-align: center; } .btn.large { max-width: 100%; } }
+.hl.pre { background: rgba(220, 60, 60, .5); }
 
 .auth-wrap { display: grid; place-items: center; padding-top: 20px; } .auth-card { width: min(100%, 440px); }
 .form-ok { color: var(--good); margin: 8px 0; } .recovery-code { display: block; font: 700 1.4rem var(--mono); text-align: center; padding: 16px; background: var(--card2); border: 2px dashed var(--accent); border-radius: 12px; letter-spacing: .08em; user-select: all; }
@@ -1856,12 +1857,13 @@ class Board {
     if (this.check) add(this.check, 'check');
     if (this.sel) { add(this.sel, 'sel'); for (const t of this.sel_targets || []) add(t, this.pos[t] ? 'cap' : 'dot'); }
     for (const sq of this.hints) add(sq, 'hint');
+    if (this.pre) { add(this.pre.from, 'pre'); add(this.pre.to, 'pre'); }
     if (this.cursor && document.activeElement === this.root) add(this.cursor, 'cur');
   }
   clearSel(render = true) { this.sel = null; this.sel_targets = null; if (render) this.renderHl(); }
 
-  canMove(sq) { const p = this.pos[sq]; if (!p || !this.o.interactive) return false; if (this.o.movableColor !== 'both' && p.color !== this.o.movableColor) return false; return p.color === this.turn || this.o.premove === true || this.o.freeTurn; }
-  select(sq) { this.sel = sq; this.sel_targets = this.o.legalTargets(sq); this.renderHl(); }
+  canMove(sq) { const p = this.pos[sq]; if (p && !this.o.interactive && this.o.canPremove && p.color === this.o.movableColor) return true; if (!p || !this.o.interactive) return false; if (this.o.movableColor !== 'both' && p.color !== this.o.movableColor) return false; return p.color === this.turn || this.o.premove === true || this.o.freeTurn; }
+  select(sq) { this.sel = sq; this.sel_targets = !this.o.interactive && this.o.canPremove ? this.pseudoTargets(sq) : this.o.legalTargets(sq); this.renderHl(); }
   sqAt(e) { const r = this.root.getBoundingClientRect(); const x = Math.floor(((e.clientX - r.left) / r.width) * 8), y = Math.floor(((e.clientY - r.top) / r.height) * 8); if (x < 0 || x > 7 || y < 0 || y > 7) return null; return xyToSq(x, y, this.o.orientation); }
   down(e) {
     if (e.button === 2) { this.arrowStart = this.sqAt(e); return; }
@@ -1871,7 +1873,7 @@ class Board {
     const sq = this.sqAt(e); if (!sq) return;
     if (this.sel && this.sel !== sq && this.sel_targets?.includes(sq)) { this.attempt(this.sel, sq); return; }
     if (this.canMove(sq)) { this.select(sq); const el = this.pieces.get(sq); if (el) { this.drag = { sq, el, id: e.pointerId, moved: false, sx: e.clientX, sy: e.clientY }; this.root.setPointerCapture?.(e.pointerId); } }
-    else this.clearSel();
+    else { this.clearSel(); if (this.pre) this.clearPremove(); }
   }
   move(e) {
     const d = this.drag; if (!d) return;
@@ -1894,6 +1896,7 @@ class Board {
     let promo;
     if (p?.type === 'p' && (rank === '8' || rank === '1')) { promo = await this.askPromotion(to, p.color); if (!promo) { this.place(this.pieces.get(from), from); this.clearSel(); return; } }
     const el = this.pieces.get(from); this.clearSel();
+    if (!this.o.interactive && this.o.canPremove) { this.pre = { from, to, promo }; if (el) this.place(el, from); this.renderHl(); return; }
     const ok = await this.o.onMove(from, to, promo);
     if (ok === false && el) this.place(el, from);
   }
@@ -1905,11 +1908,26 @@ class Board {
       this.promo = box; this.root.append(box);
     });
   }
+  // Premoves: one queued move for the side that is waiting. Targets ignore checks and pins; the rules engine rechecks when the move is played.
+  getPremove() { return this.pre || null; }
+  clearPremove() { if (this.pre) { this.pre = null; this.renderHl(); } }
+  takePremove() { const p = this.pre || null; this.pre = null; this.renderHl(); return p; }
+  pseudoTargets(sq) {
+    const p = this.pos[sq]; if (!p) return []; const f = sq.charCodeAt(0) - 97, r = sq.charCodeAt(1) - 49; const out = []; const name = (x, y) => String.fromCharCode(97 + x) + (y + 1);
+    const ok = (x, y) => x >= 0 && x < 8 && y >= 0 && y < 8; const own = (x, y) => this.pos[name(x, y)]?.color === p.color;
+    const ray = (dx, dy) => { for (let x = f + dx, y = r + dy; ok(x, y); x += dx, y += dy) { if (own(x, y)) break; out.push(name(x, y)); if (this.pos[name(x, y)]) break; } };
+    const step = (dx, dy) => { const x = f + dx, y = r + dy; if (ok(x, y) && !own(x, y)) out.push(name(x, y)); };
+    if (p.type === 'n') [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]].forEach(([a, c]) => step(a, c));
+    else if (p.type === 'k') { for (let a = -1; a <= 1; a++) for (let c = -1; c <= 1; c++) if (a || c) step(a, c); if (r === (p.color === 'w' ? 0 : 7) && f === 4) { out.push(name(6, r), name(2, r)); } }
+    else if (p.type === 'p') { const d = p.color === 'w' ? 1 : -1; if (ok(f, r + d) && !this.pos[name(f, r + d)]) { out.push(name(f, r + d)); if (r === (p.color === 'w' ? 1 : 6) && !this.pos[name(f, r + 2 * d)]) out.push(name(f, r + 2 * d)); } for (const a of [-1, 1]) if (ok(f + a, r + d) && !own(f + a, r + d)) out.push(name(f + a, r + d)); }
+    else { if (p.type !== 'b') { ray(1, 0); ray(-1, 0); ray(0, 1); ray(0, -1); } if (p.type !== 'r') { ray(1, 1); ray(1, -1); ray(-1, 1); ray(-1, -1); } }
+    return out;
+  }
   say(t) { this.live.textContent = ''; setTimeout(() => { this.live.textContent = t; }, 30); }
   describeSq(sq) { const p = this.pos[sq]; const N = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }; let t = sq + ', ' + (p ? (p.color === 'w' ? 'white ' : 'black ') + N[p.type] : 'empty'); if (this.sel === sq) t += ', selected'; else if (this.sel_targets?.includes(sq)) t += ', legal move'; return t; }
   key(e) {
     if (this.promo || e.altKey || e.ctrlKey || e.metaKey) return;
-    if (e.key === 'Escape') { this.clearSel(); this.say('Selection cleared'); return; }
+    if (e.key === 'Escape') { this.clearSel(); if (this.pre) { this.clearPremove(); this.say('Premove cancelled'); } else this.say('Selection cleared'); return; }
     const D = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
     if (D) { e.preventDefault(); e.stopPropagation(); const [x, y] = sqToXY(this.cursor || xyToSq(4, 6, this.o.orientation), this.o.orientation); this.cursor = xyToSq(Math.max(0, Math.min(7, x + D[0])), Math.max(0, Math.min(7, y + D[1])), this.o.orientation); this.renderHl(); this.say(this.describeSq(this.cursor)); return; }
     if (e.key === 'Enter' || e.key === ' ') {
@@ -1953,17 +1971,29 @@ const GLYPH = { wk: '\u2654', wq: '\u2655', wr: '\u2656', wb: '\u2657', wn: '\u2
 const PIECE_SETS = {
   rook: 'Rookery (default)',
   mono: 'Monochrome',
+  wood: 'Maple and walnut',
+  metal: 'Gold and silver',
+  glass: 'Glass',
+  outline: 'Outline',
+  bold: 'Bold',
+  candy: 'Candy',
+  neon: 'Neon',
   classic: 'Classic glyphs',
   letters: 'Letters',
 };
 const svgFor = (color, type, set) => {
-  if (set === 'classic') return `<svg viewBox="0 0 100 100"><text x="50" y="76" text-anchor="middle" font-size="86" font-family="'Segoe UI Symbol','Noto Sans Symbols 2','DejaVu Sans',serif" fill="${color === 'w' ? '#fff' : '#111'}" stroke="${color === 'w' ? '#111' : '#fff'}" stroke-width="${color === 'w' ? 2.5 : 0}" paint-order="stroke">${GLYPH[color + type]}</text></svg>`;
-  if (set === 'letters') return `<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="${color === 'w' ? '#f6f1e4' : '#2b2e38'}" stroke="${color === 'w' ? '#2b2e38' : '#f6f1e4'}" stroke-width="4"/><text x="50" y="66" text-anchor="middle" font-size="46" font-weight="700" font-family="Georgia,serif" fill="${color === 'w' ? '#2b2e38' : '#f6f1e4'}">${type.toUpperCase()}</text></svg>`;
-  const mono = set === 'mono';
-  const fill = color === 'w' ? (mono ? '#ffffff' : '#f7f2e6') : (mono ? '#000000' : '#343845');
-  const stroke = color === 'w' ? '#1b1d24' : (mono ? '#ffffff' : '#0d0e12');
-  const detail = color === 'w' ? '#1b1d24' : '#f2ecda';
-  return `<svg viewBox="0 0 100 100" fill="${fill}" stroke="${stroke}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><style>.d{fill:none;stroke:${detail};stroke-width:2.5}.e{fill:${detail};stroke:none}</style>${P[type]}</svg>`;
+  if (set === 'classic') return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y="76" text-anchor="middle" font-size="86" font-family="'Segoe UI Symbol','Noto Sans Symbols 2','DejaVu Sans',serif" fill="${color === 'w' ? '#fff' : '#111'}" stroke="${color === 'w' ? '#111' : '#fff'}" stroke-width="${color === 'w' ? 2.5 : 0}" paint-order="stroke">${GLYPH[color + type]}</text></svg>`;
+  if (set === 'letters') return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="${color === 'w' ? '#f6f1e4' : '#2b2e38'}" stroke="${color === 'w' ? '#2b2e38' : '#f6f1e4'}" stroke-width="4"/><text x="50" y="66" text-anchor="middle" font-size="46" font-weight="700" font-family="Georgia,serif" fill="${color === 'w' ? '#2b2e38' : '#f6f1e4'}">${type.toUpperCase()}</text></svg>`;
+  // Colour skins share the original silhouettes: [white fill, white edge, white detail, black fill, black edge, black detail, stroke width]
+  const V = {
+    rook: ['#f7f2e6', '#1b1d24', '#1b1d24', '#343845', '#0d0e12', '#f2ecda', 3], mono: ['#ffffff', '#1b1d24', '#1b1d24', '#000000', '#ffffff', '#f2ecda', 3],
+    wood: ['#f0d6a8', '#6b4524', '#6b4524', '#6a3f22', '#2a170a', '#e8c590', 3], metal: ['#e4e7ec', '#59606d', '#59606d', '#d9a928', '#6b4f08', '#fff0b0', 3],
+    glass: ['#e8f4ff', '#4f86b5', '#4f86b5', '#2d3a58', '#8fb4ff', '#cfe0ff', 3], outline: ['#ffffff', '#222222', '#222222', '#303030', '#ffffff', '#ffffff', 5],
+    bold: ['#ffd23f', '#111111', '#111111', '#e63946', '#111111', '#ffffff', 6], candy: ['#ffd1e8', '#b03a76', '#b03a76', '#7a4fd6', '#3c2183', '#e2d6ff', 3],
+    neon: ['#10242b', '#2dfce0', '#2dfce0', '#2a1233', '#ff4fd8', '#ff4fd8', 3.5],
+  }[set] || null; const v = V || ['#f7f2e6', '#1b1d24', '#1b1d24', '#343845', '#0d0e12', '#f2ecda', 3];
+  const w = color === 'w'; const fill = w ? v[0] : v[3], stroke = w ? v[1] : v[4], detail = w ? v[2] : v[5];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="${fill}" stroke="${stroke}" stroke-width="${v[6]}" stroke-linejoin="round" stroke-linecap="round"><style>.d{fill:none;stroke:${detail};stroke-width:2.5}.e{fill:${detail};stroke:none}</style>${P[type]}</svg>`;
 };
 const cache = {};
 function pieceSvg(color, type, set = 'rook') { const k = set + color + type; return cache[k] || (cache[k] = svgFor(color, type, set)); }
@@ -2135,6 +2165,9 @@ const BOARDS = {
   ember: ['#ead9b7', '#a8693f', 'Ember'], walnut: ['#f0d9b5', '#b58863', 'Walnut'], moss: ['#eeeed2', '#769656', 'Moss'], slate: ['#dee3e6', '#8ca2ad', 'Slate'],
   ice: ['#e8f1f8', '#6b93b8', 'Ice'], rose: ['#f6e4e4', '#c27a8a', 'Rose'], midnight: ['#8c92ad', '#3b4166', 'Midnight'], sand: ['#f4ead2', '#c9a15b', 'Sand'],
   violet: ['#e6def2', '#8466b3', 'Violet'], mono: ['#e5e5e5', '#8a8a8a', 'Monochrome'], neon: ['#2a3a3a', '#16211f', 'Neon'], coral: ['#ffe5d0', '#e0805a', 'Coral'],
+  forest: ['#dfe8d0', '#4f7a4a', 'Forest'], ocean: ['#d6ecf2', '#2f7f9c', 'Ocean'], ruby: ['#f3dcdc', '#a02c3c', 'Ruby'], graphite: ['#c9ccd1', '#4b4f58', 'Graphite'],
+  gold: ['#f6e7b4', '#b8902c', 'Gold'], sunset: ['#ffe1b8', '#d5603a', 'Sunset'], mint: ['#e2f6ee', '#4fb08a', 'Mint'], candy: ['#fde3f1', '#c46aa2', 'Candy'],
+  lava: ['#3a2a28', '#7a2f1c', 'Lava'], paper: ['#fbfaf5', '#b9b6a8', 'Paper'], night: ['#556078', '#1e2536', 'Night'], lavender: ['#efe9fb', '#9c8bd0', 'Lavender'],
 };
 const BACKGROUNDS = { none: 'Plain', dusk: 'Dusk gradient', felt: 'Green felt', paper: 'Paper', grid: 'Blueprint grid', aurora: 'Aurora' };
 const PROFILE_THEMES = { ember: ['#e0a33e', 'Ember'], teal: ['#2ba7a0', 'Teal'], crimson: ['#d4495a', 'Crimson'], indigo: ['#6b78e5', 'Indigo'], forest: ['#5aa05a', 'Forest'], orchid: ['#b86fd1', 'Orchid'] };
@@ -2259,6 +2292,7 @@ function playGame(root, ctx, o) {
     const fen = viewPly == null ? chess.fen() : fenAt(viewPly); const hist = chess.history(); const uci = chess.historyUci(); const li = (viewPly ?? hist.length) - 1;
     const g = new Chess(fen); board.setPosition(fen, { lastMove: li >= 0 ? [uci[li].slice(0, 2), uci[li].slice(2, 4)] : null, check: g.inCheck() ? board.kingSquare(g.turnColor()) : null, animate });
     board.setInteractive(!over && !thinking && viewPly == null && chess.turnColor() === o.human, o.human);
+    board.o.canPremove = !over && viewPly == null && chess.turnColor() !== o.human && state.prefs.premove !== false; if (!board.o.canPremove && chess.turnColor() !== o.human) board.clearPremove();
     moveList(movesEl, hist, viewPly ?? hist.length, goto);
     const cap = captured(fen); const hm = o.human, cm = cpuColor;
     meStrip.caps.textContent = cap[hm] + ((hm === 'w' ? cap.diff : -cap.diff) > 0 ? ' +' + Math.abs(cap.diff) : ''); cpuStrip.caps.textContent = cap[cm] + ((cm === 'w' ? cap.diff : -cap.diff) > 0 ? ' +' + Math.abs(cap.diff) : '');
@@ -2282,7 +2316,7 @@ function playGame(root, ctx, o) {
   function advanceClock() { const now = Date.now(); if (o.initial && chess.ply >= 2) { const i = 1 - chess.turn; clocks[i] = Math.max(0, clocks[i] - (now - last)) + (o.inc * 1000); } last = now; }
   function afterMove(mv) {
     soundForMove(mv, chess.inCheck()); window.__rkSaveCpu(o, chess.history(), clocks); hintArrow && (board.setArrows([]), board.setHints([]), hintArrow = false);
-    const st = chess.status(); if (st.over) return endGame(st.result, st.reason); refresh(); maybeCpu();
+    const st = chess.status(); if (st.over) { board.clearPremove(); return endGame(st.result, st.reason); } refresh(); maybeCpu(); if (mv.color !== o.human) { const pm = board.takePremove(); if (pm) setTimeout(() => { if (!dead && !over) onUser(pm.from, pm.to, pm.promo); }, 60); }
   }
   async function onUser(from, to, promo) {
     if (over || thinking || chess.turnColor() !== o.human || viewPly != null) return false;
@@ -2304,7 +2338,7 @@ function playGame(root, ctx, o) {
     } catch (e) { thinking = false; if (e.message !== 'cancelled') { status.textContent = ''; toast(e.message, 'error'); } }
   }
   async function hint() { status.textContent = 'Thinking about a hint\u2026'; try { const r = await analyse(chess.fen(), { depth: 9, movetime: 700 }); status.textContent = ''; if (r.move) { board.setArrows([{ from: r.move.slice(0, 2), to: r.move.slice(2, 4) }]); board.o.keepArrows = true; hintArrow = true; } } catch { status.textContent = ''; } }
-  function takeback() { if (thinking) return; token++; const n = chess.turnColor() === o.human ? 2 : 1; for (let i = 0; i < n; i++) chess.undo(); window.__rkSaveCpu(o, chess.history(), clocks); viewPly = null; board.setArrows([]); refresh(false); }
+  function takeback() { if (thinking) return; board.clearPremove(); token++; const n = chess.turnColor() === o.human ? 2 : 1; for (let i = 0; i < n; i++) chess.undo(); window.__rkSaveCpu(o, chess.history(), clocks); viewPly = null; board.setArrows([]); refresh(false); }
   async function offerDraw() {
     status.textContent = 'Computer is considering your draw offer\u2026';
     try { const r = await analyse(chess.fen(), { depth: 7, movetime: 500 }); status.textContent = ''; const sc = r.score * (chess.turnColor() === cpuColor ? 1 : -1); if (sc <= -80 || (chess.ply > 80 && sc < 40)) endGame('1/2-1/2', 'agreement'); else toast('The computer declines the draw.', 'info'); } catch { status.textContent = ''; }
@@ -2813,14 +2847,14 @@ const { play } = __req("js/sound.js");
 async function settings(root, ctx) {
   ctx.setTitle('Settings');
   const panel = h('div', { class: 'col' });
-  const toggle = (label, key) => { const i = h('input', { type: 'checkbox', checked: !!state.prefs[key], onchange: () => setPrefs({ [key]: i.checked }) }); return h('label', { class: 'check setting' }, i, h('span', null, h('strong', null, label))); };
+  const toggle = (label, key, dflt = false) => { const i = h('input', { type: 'checkbox', checked: state.prefs[key] === undefined ? dflt : !!state.prefs[key], onchange: () => setPrefs({ [key]: i.checked }) }); return h('label', { class: 'check setting' }, i, h('span', null, h('strong', null, label))); };
   const piece = (c, t, set) => { const s = h('span', { class: 'pv' }); s.append(new DOMParser().parseFromString(pieceSvg(c, t, set), 'image/svg+xml').documentElement); return s; };
   const draw = () => { clear(panel); panel.append(
     h('section', { class: 'card' }, h('h2', null, 'Theme'), h('div', { class: 'seg' }, [['dark', '\u263e Dark'], ['light', '\u2600 Light'], ['system', '\ud83d\udda5 System']].map(([v, l]) => h('button', { class: state.prefs.theme === v ? 'active' : '', onclick: () => { setPrefs({ theme: v }); draw(); } }, l)))),
     h('section', { class: 'card' }, h('h2', null, 'Language'), h('select', { 'aria-label': 'Language', onchange: (e) => setLang(e.target.value) }, Object.entries(languages).map(([k, v]) => h('option', { value: k, selected: k === getLang() }, v))), h('p', { class: 'muted small' }, 'Menus, buttons and game controls are translated. Lessons are translated. Opening names, puzzle themes and some labels stay in English.')),
     h('section', { class: 'card' }, h('h2', null, 'Board'), h('div', { class: 'swatches' }, Object.entries(BOARDS).map(([id, [l, d, name]]) => h('button', { class: 'swatch' + (state.prefs.board === id ? ' active' : ''), 'aria-pressed': state.prefs.board === id, onclick: () => { setPrefs({ board: id }); draw(); } }, h('span', { class: 'mini-board', style: { background: `conic-gradient(${l} 25%, ${d} 0 50%, ${l} 0 75%, ${d} 0)`, backgroundSize: '50% 50%' } }), h('span', null, name))))),
     h('section', { class: 'card' }, h('h2', null, 'Pieces'), h('div', { class: 'swatches' }, Object.entries(PIECE_SETS).map(([id, name]) => h('button', { class: 'swatch' + (state.prefs.pieces === id ? ' active' : ''), 'aria-pressed': state.prefs.pieces === id, onclick: () => { setPrefs({ pieces: id }); draw(); } }, h('span', { class: 'piece-prev' }, piece('w', 'n', id), piece('b', 'q', id)), h('span', null, name))))),
-    h('section', { class: 'card' }, h('h2', null, 'Display and sound'), toggle('Board coordinates', 'coords'), toggle('Piece animations', 'animations'), toggle('Sound effects', 'sound'), h('button', { class: 'btn small', onclick: () => play('move') }, '\u25b6 Test sound')),
+    h('section', { class: 'card' }, h('h2', null, 'Display and sound'), toggle('Board coordinates', 'coords'), toggle('Piece animations', 'animations'), toggle('Premoves (queue a move on your opponent\'s turn)', 'premove', true), toggle('Sound effects', 'sound'), h('button', { class: 'btn small', onclick: () => play('move') }, '\u25b6 Test sound')),
     h('p', { class: 'muted small' }, 'Settings are saved in this browser only.')); };
   draw(); root.append(h('h1', null, 'Settings'), panel);
 }
@@ -3059,9 +3093,9 @@ function addProfile(name) { const id = 'p' + Date.now().toString(36); list.push(
 function switchProfile(id) { if (list.some((p) => p.id === id)) { active = id; write(); } }
 function deleteProfile(id) { if (list.length < 2) return false; list = list.filter((p) => p.id !== id); for (const k of PER) rawDel.call(localStorage, k + '@' + id); if (id === 'p1') for (const k of PER) rawDel.call(localStorage, k); if (active === id) active = list[0].id; write(); return true; }
 function peek(id) { const g = (k) => { try { return JSON.parse(rawGet.call(localStorage, keyFor(k, id)) || 'null'); } catch { return null; } }; const games = g('rk_games') || []; const pz = g('rk_pz2') || {}; return { games: games.length, rating: Math.round(pz.rating || 1200), solved: pz.solved || 0 }; }
-function exportAll() { const out = {}; for (let i = 0; i < localStorage.length; i++) { const k = rawKeyAt(i); if (k && k.startsWith('rk_')) out[k] = rawGet.call(localStorage, k); } return JSON.stringify({ app: 'rookery', version: 1, data: out }, null, 1); }
+function exportAll() { const out = {}; for (let i = 0; i < localStorage.length; i++) { const k = rawKeyAt(i); if (k && k.startsWith('rk_') && !k.startsWith('rk_admin')) out[k] = rawGet.call(localStorage, k); } return JSON.stringify({ app: 'rookery', version: 1, data: out }, null, 1); }
 const rawKeyAt = (i) => Storage.prototype.key.call(localStorage, i);
-function importAll(text) { const j = JSON.parse(text); if (j.app !== 'rookery' || typeof j.data !== 'object') throw new Error('This is not a Rookery backup file.'); let n = 0; for (const [k, v] of Object.entries(j.data)) { if (/^rk_[A-Za-z0-9_@.-]+$/.test(k) && typeof v === 'string' && v.length < 5_000_000) { rawSet.call(localStorage, k, v); n++; } } return n; }
+function importAll(text) { const j = JSON.parse(text); if (j.app !== 'rookery' || typeof j.data !== 'object') throw new Error('This is not a Rookery backup file.'); let n = 0; for (const [k, v] of Object.entries(j.data)) { if (/^rk_[A-Za-z0-9_@.-]+$/.test(k) && !k.startsWith('rk_admin') && typeof v === 'string' && v.length < 5_000_000) { rawSet.call(localStorage, k, v); n++; } } return n; }
 
 Object.assign(__exports, { "initProfiles": initProfiles, "updateProfile": updateProfile, "addProfile": addProfile, "switchProfile": switchProfile, "deleteProfile": deleteProfile, "peek": peek, "exportAll": exportAll, "importAll": importAll, "keyFor": keyFor, "profiles": profiles, "activeProfile": activeProfile, "AVATARS": AVATARS, "asUser": asUser });
 };
@@ -3504,6 +3538,18 @@ const R = [
 ['2. Paste the reply code they send back', '2. Pega el c\u00f3digo de respuesta que te devuelva', '2. Collez le code de r\u00e9ponse qu\u2019il vous renvoie', '2. F\u00fcge den Antwortcode ein, den er zur\u00fcckschickt', '2. Cole o c\u00f3digo de resposta que ele devolver', '2. Incolla il codice di risposta che ti rimanda'],
 ['Send this reply code back to your friend', 'Env\u00eda este c\u00f3digo de respuesta a tu amigo', 'Renvoyez ce code de r\u00e9ponse \u00e0 votre ami', 'Schick diesen Antwortcode an deinen Freund zur\u00fcck', 'Envie este c\u00f3digo de resposta ao seu amigo', 'Rimanda questo codice di risposta al tuo amico'],
 ['Keep this page open. The game starts as soon as your friend pastes your reply.', 'Mant\u00e9n esta p\u00e1gina abierta. La partida empieza en cuanto tu amigo pegue tu respuesta.', "Gardez cette page ouverte. La partie commence d\u00e8s que votre ami colle votre r\u00e9ponse.", 'Lass diese Seite ge\u00f6ffnet. Die Partie beginnt, sobald dein Freund deine Antwort einf\u00fcgt.', 'Mantenha esta p\u00e1gina aberta. A partida come\u00e7a assim que o seu amigo colar a sua resposta.', 'Tieni aperta questa pagina. La partita inizia appena il tuo amico incolla la tua risposta.'],
+['Maple and walnut', 'Arce y nogal', '\u00c9rable et noyer', 'Ahorn und Nussbaum', 'Bordo e nogueira', 'Acero e noce'],
+['Gold and silver', 'Oro y plata', 'Or et argent', 'Gold und Silber', 'Ouro e prata', 'Oro e argento'],
+['Glass', 'Cristal', 'Verre', 'Glas', 'Vidro', 'Vetro'],
+['Outline', 'Contorno', 'Contour', 'Umriss', 'Contorno', 'Contorno'],
+['Bold', 'Atrevido', 'Audacieux', 'Kr\u00e4ftig', 'Ousado', 'Deciso'],
+['Candy', 'Caramelo', 'Bonbon', 'Bonbon', 'Doce', 'Caramella'],
+['Neon', 'Ne\u00f3n', 'N\u00e9on', 'Neon', 'N\u00e9on', 'Neon'],
+['Rookery (default)', 'Rookery (predeterminado)', 'Rookery (par d\u00e9faut)', 'Rookery (Standard)', 'Rookery (predefini\u00e7\u00e3o)', 'Rookery (predefinito)'],
+['Monochrome', 'Monocromo', 'Monochrome', 'Einfarbig', 'Monocrom\u00e1tico', 'Monocromatico'],
+['Classic glyphs', 'Glifos cl\u00e1sicos', 'Glyphes classiques', 'Klassische Symbole', 'Glifos cl\u00e1ssicos', 'Glifi classici'],
+['Letters', 'Letras', 'Lettres', 'Buchstaben', 'Letras', 'Lettere'],
+["Premoves (queue a move on your opponent's turn)", 'Jugadas previas (programa una jugada en el turno del rival)', "Coups pr\u00e9vus (pr\u00e9parez un coup pendant le tour adverse)", 'Vorz\u00fcge (einen Zug im Zug des Gegners vormerken)', 'Jogadas antecipadas (prepare uma jogada na vez do advers\u00e1rio)', "Premosse (prepara una mossa durante il turno dell'avversario)"],
 ];
 const strip = (x) => x.trim().replace(/^[^\p{L}\d]+/u, '');
 const T = {}; ORDER.forEach((l, i) => { T[l] = new Map(R.map((r) => [strip(r[0]), strip(r[i + 1])])); });
@@ -3533,6 +3579,77 @@ function startI18n(root) {
 }
 
 Object.assign(__exports, { "getLang": getLang, "setLang": setLang, "startI18n": startI18n, "languages": languages });
+};
+__defs["js/pages/admin-local.js"] = function (__req, __exports) {
+// Hidden admin panel for THIS browser's Rookery data. It is not a security boundary: anyone with the device,
+// the browser's developer tools or this file's source can bypass it. The passcode only keeps casual visitors out.
+const { h, clear, toast, confirmBox, promptBox, download, pickFile } = __req("js/util.js");
+const { profiles, activeProfile, peek, deleteProfile, updateProfile, exportAll, importAll } = __req("js/profiles.js");
+const { Chess } = __req("shared/chess.js");
+const KEY = 'rk_admin', FAIL = 'rk_admin_fail', SESSION = 'rk_admin_ok', IDLE = 15 * 60_000;
+const hex = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
+const unhex = (s) => Uint8Array.from(s.match(/../g) || [], (x) => parseInt(x, 16));
+async function hashPass(pass, salt) { const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveBits']); return hex(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 150000 }, k, 256)); }
+const same = (a, b) => { let d = a.length ^ b.length; for (let i = 0; i < Math.min(a.length, b.length); i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; };
+const getRec = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } };
+async function setPasscode(pass) { const salt = crypto.getRandomValues(new Uint8Array(16)); localStorage.setItem(KEY, JSON.stringify({ salt: hex(salt), hash: await hashPass(pass, salt), made: Date.now() })); }
+async function checkPasscode(pass) { const r = getRec(); if (!r) return false; return same(await hashPass(pass, unhex(r.salt)), r.hash); }
+const unlocked = () => { try { const t = +sessionStorage.getItem(SESSION); return t && Date.now() - t < IDLE; } catch { return false; } };
+const touch = () => { try { sessionStorage.setItem(SESSION, String(Date.now())); } catch {} };
+const fails = () => { try { return JSON.parse(localStorage.getItem(FAIL) || '{"n":0,"until":0}'); } catch { return { n: 0, until: 0 }; } };
+const kb = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB';
+
+async function admin(root, ctx) {
+  ctx.setTitle('Admin');
+  const box = h('div', { class: 'col' }); root.append(h('h1', null, 'Admin panel'), box);
+  const notice = h('div', { class: 'card', style: { borderColor: 'var(--accent)' } }, h('strong', null, 'Local tools only. '), 'This panel manages the data stored in this browser. Rookery has no server, so there are no accounts to administer and this is not real security: anyone with access to this device can still read or change the data.');
+  if (!window.crypto?.subtle) { box.append(notice, h('div', { class: 'card' }, 'The passcode needs a secure page (https:// or a local file). Open the site over https to use the admin panel.')); return; }
+  let idleTimer; const lock = () => { try { sessionStorage.removeItem(SESSION); } catch {} clearInterval(idleTimer); draw(); };
+  function draw() { clear(box); if (!getRec()) return setup(); if (!unlocked()) return login(); touch(); panel(); }
+  function setup() {
+    const p1 = h('input', { type: 'password', autocomplete: 'new-password', 'aria-label': 'New passcode', placeholder: 'At least 8 characters' }), p2 = h('input', { type: 'password', autocomplete: 'new-password', 'aria-label': 'Repeat passcode', placeholder: 'Repeat it' });
+    box.append(notice, h('section', { class: 'card form-card col' }, h('h2', null, 'Set a passcode'), h('p', { class: 'muted' }, 'Choose a passcode for this panel. It is stored only in this browser, as a salted hash. If you forget it, clearing the site\u2019s data in your browser resets it (and removes everything else saved here).'), h('label', { class: 'field' }, h('span', null, 'Passcode'), p1), h('label', { class: 'field' }, h('span', null, 'Repeat passcode'), p2),
+      h('button', { class: 'btn primary', onclick: async () => { if (p1.value.length < 8) return toast('Use at least 8 characters.', 'error'); if (p1.value !== p2.value) return toast('The two passcodes differ.', 'error'); await setPasscode(p1.value); touch(); toast('Passcode set', 'success'); draw(); } }, 'Save passcode')));
+  }
+  function login() {
+    const p = h('input', { type: 'password', autocomplete: 'current-password', 'aria-label': 'Passcode', onkeydown: (e) => { if (e.key === 'Enter') go(); } }); const msg = h('p', { class: 'loss', 'aria-live': 'polite' });
+    async function go() { const f = fails(); if (Date.now() < f.until) { msg.textContent = `Too many attempts. Try again in ${Math.ceil((f.until - Date.now()) / 1000)} s.`; return; }
+      if (await checkPasscode(p.value)) { try { localStorage.removeItem(FAIL); } catch {} touch(); draw(); return; }
+      const n = f.n + 1; const until = n >= 5 ? Date.now() + Math.min(600, 30 * 2 ** (n - 5)) * 1000 : 0; try { localStorage.setItem(FAIL, JSON.stringify({ n, until })); } catch {} msg.textContent = until ? 'Too many attempts. Locked for a while.' : 'Wrong passcode.'; p.value = ''; }
+    box.append(notice, h('section', { class: 'card form-card col' }, h('h2', null, 'Enter passcode'), h('label', { class: 'field' }, h('span', null, 'Passcode'), p), h('div', null, h('button', { class: 'btn primary', onclick: go }, 'Unlock')), msg));
+    setTimeout(() => p.focus(), 50);
+  }
+  function usage() { const rows = []; let total = 0; for (let i = 0; i < localStorage.length; i++) { const k = Storage.prototype.key.call(localStorage, i); const v = Storage.prototype.getItem.call(localStorage, k) || ''; const bytes = (k.length + v.length) * 2; total += bytes; rows.push([k, bytes]); } rows.sort((a, b) => b[1] - a[1]); return { rows, total }; }
+  function panel() {
+    idleTimer = setInterval(() => { if (!unlocked()) { clearInterval(idleTimer); toast('Admin panel locked after 15 minutes idle.', 'info'); draw(); } }, 30_000); ctx.onCleanup(() => clearInterval(idleTimer));
+    const act = activeProfile(); const ps = profiles(); const { rows, total } = usage();
+    const stat = (n, l) => h('div', { class: 'card center' }, h('div', { style: { fontSize: '1.8rem', fontWeight: 700 } }, String(n)), h('div', { class: 'muted small' }, l));
+    const infos = ps.map((p) => ({ p, i: peek(p.id) })); const games = infos.reduce((a, x) => a + x.i.games, 0);
+    const profTable = h('table', { class: 'table' }, h('thead', null, h('tr', null, ['Player', 'Games', 'Puzzle rating', 'Solved', ''].map((t) => h('th', null, t)))), h('tbody', null, infos.map(({ p, i }) => h('tr', null, h('td', null, p.name, p.id === act.id ? h('span', { class: 'pill' }, 'active') : null), h('td', null, i.games), h('td', null, i.rating), h('td', null, i.solved),
+      h('td', null, h('button', { class: 'btn small ghost', onclick: async () => { const n = await promptBox('Rename player', 'Name', { value: p.name }); if (n && n.trim()) { updateProfile(p.id, { name: n.trim().slice(0, 20) }); draw(); } } }, 'Rename'), ' ',
+        h('button', { class: 'btn small ghost', disabled: ps.length < 2, onclick: async () => { if (await confirmBox('Delete ' + p.name + '?', 'This removes the player and all of their games, puzzle rating and progress from this browser.', 'Delete')) { deleteProfile(p.id); toast('Player deleted'); draw(); } } }, 'Delete'))))));
+    const perftOut = h('p', { class: 'muted small mono' }); const diag = [['Browser', navigator.userAgent], ['Language', navigator.language], ['Screen', `${screen.width}\u00d7${screen.height} @${devicePixelRatio}x`], ['Secure context', String(isSecureContext)], ['Web Workers', String(typeof Worker !== 'undefined')], ['WebRTC (online play)', String(typeof RTCPeerConnection !== 'undefined')], ['CompressionStream', String(typeof CompressionStream !== 'undefined')], ['localStorage used', kb(total)], ['Network requests made by this page', 'none (single file, no server)']];
+    box.append(notice,
+      h('div', { class: 'grid-3' }, stat(ps.length, 'players'), stat(games, 'saved games'), stat(kb(total), 'browser storage used')),
+      h('section', { class: 'card' }, h('h2', null, 'Players on this device'), h('div', { class: 'table-wrap' }, profTable)),
+      h('section', { class: 'card col' }, h('h2', null, 'Data'), h('div', { class: 'row' },
+        h('button', { class: 'btn', onclick: () => { download('rookery-backup-' + new Date().toISOString().slice(0, 10) + '.json', exportAll(), 'application/json'); } }, '\u2b07 Download full backup'),
+        h('button', { class: 'btn', onclick: async () => { const f = await pickFile('application/json,.json'); if (!f) return; try { const n = importAll(await f.text()); toast(`Restored ${n} items. Reloading\u2026`, 'success'); setTimeout(() => location.reload(), 800); } catch (e) { toast(e.message, 'error'); } } }, '\u2b06 Restore backup'),
+        h('button', { class: 'btn danger', onclick: async () => { if (!await confirmBox('Erase everything?', 'This deletes every player, game, rating, setting and the admin passcode stored in this browser. Download a backup first. It cannot be undone.', 'Erase everything')) return; const keys = []; for (let i = 0; i < localStorage.length; i++) { const k = Storage.prototype.key.call(localStorage, i); if (k && k.startsWith('rk_')) keys.push(k); } keys.forEach((k) => Storage.prototype.removeItem.call(localStorage, k)); try { sessionStorage.clear(); } catch {} location.hash = '/'; setTimeout(() => location.reload(), 100); } }, 'Erase all data')),
+        h('p', { class: 'muted small' }, 'Backups never include the admin passcode.')),
+      h('section', { class: 'card' }, h('h2', null, 'Storage by item'), h('div', { class: 'table-wrap' }, h('table', { class: 'table' }, h('thead', null, h('tr', null, h('th', null, 'Key'), h('th', { class: 'num' }, 'Size'))), h('tbody', null, rows.slice(0, 14).map(([k, b]) => h('tr', null, h('td', { class: 'mono small' }, k), h('td', { class: 'num' }, kb(b)))))))),
+      h('section', { class: 'card col' }, h('h2', null, 'Diagnostics'), h('table', { class: 'table' }, h('tbody', null, diag.map(([k, v]) => h('tr', null, h('td', { class: 'muted' }, k), h('td', { class: 'small', style: { overflowWrap: 'anywhere' } }, v))))),
+        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => { const t0 = performance.now(); const g = new Chess(); const n = g.perft(4); const ms = Math.round(performance.now() - t0); perftOut.textContent = `Rules check: perft(4) from the start position = ${n} (expected 197281) \u2014 ${n === 197281 ? 'PASS' : 'FAIL'} in ${ms} ms`; } }, 'Run rules self-test')), perftOut),
+      h('section', { class: 'card col' }, h('h2', null, 'Security'), h('div', { class: 'row' },
+        h('button', { class: 'btn', onclick: lock }, 'Lock now'),
+        h('button', { class: 'btn', onclick: async () => { const cur = await promptBox('Change passcode', 'Current passcode', { type: 'password' }); if (cur == null) return; if (!await checkPasscode(cur)) return toast('Wrong passcode.', 'error'); const n = await promptBox('Change passcode', 'New passcode (8+ characters)', { type: 'password' }); if (!n || n.length < 8) return toast('Use at least 8 characters.', 'error'); await setPasscode(n); toast('Passcode changed', 'success'); } }, 'Change passcode'),
+        h('button', { class: 'btn ghost', onclick: async () => { const cur = await promptBox('Remove passcode', 'Current passcode', { type: 'password' }); if (cur == null) return; if (!await checkPasscode(cur)) return toast('Wrong passcode.', 'error'); localStorage.removeItem(KEY); lock(); toast('Passcode removed', 'success'); } }, 'Remove passcode')),
+        h('p', { class: 'muted small' }, 'This page is not linked anywhere on the site. Its address is the site address followed by #/admin.')));
+  }
+  draw();
+}
+
+Object.assign(__exports, { "default": admin, "setPasscode": setPasscode, "checkPasscode": checkPasscode });
 };
 __defs["js/i18n-lessons.js"] = function (__req, __exports) {
 // Lesson text translations: English -> [es, fr, de, pt, it]
@@ -3764,7 +3881,8 @@ async function online(root, ctx) {
     function refresh(animate = true) {
       const fen = viewPly == null ? chess.fen() : fenAt(viewPly); const hist = chess.history(), uci = chess.historyUci(), li = (viewPly ?? hist.length) - 1, g = new Chess(fen);
       board.setPosition(fen, { lastMove: li >= 0 ? [uci[li].slice(0, 2), uci[li].slice(2, 4)] : null, check: g.inCheck() ? board.kingSquare(g.turnColor()) : null, animate });
-      board.setInteractive(!over && viewPly == null && chess.turnColor() === mine, mine); moveList(movesEl, hist, viewPly ?? hist.length, goto);
+      board.setInteractive(!over && viewPly == null && chess.turnColor() === mine, mine);
+      board.o.canPremove = !over && viewPly == null && chess.turnColor() !== mine && state.prefs.premove !== false; if (!board.o.canPremove && chess.turnColor() !== mine) board.clearPremove(); moveList(movesEl, hist, viewPly ?? hist.length, goto);
       turnEl.textContent = over ? 'Game over' : chess.turnColor() === mine ? 'Your move' : `${names()[chess.turnColor()]} to move`; drawActions();
     }
     function paint() {
@@ -3799,7 +3917,7 @@ async function online(root, ctx) {
       const now = Date.now(); if (o.initial && chess.ply >= 3) clocks[1 - chess.turn] = Math.max(0, clocks[1 - chess.turn] - (now - last)) + o.inc * 1000; last = now;
       sendNow({ t: 'move', uci: mv.lan, left: clocks[1 - chess.turn] }); after(mv); return true;
     }
-    function after(mv) { soundForMove(mv, chess.inCheck()); drawOffered = false; const st = chess.status(); refresh(); if (st.over) end(st.result, st.reason, false); }
+    function after(mv) { soundForMove(mv, chess.inCheck()); drawOffered = false; const st = chess.status(); refresh(); if (st.over) { board.clearPremove(); end(st.result, st.reason, false); } else if (mv.color !== mine) { const pm = board.takePremove(); if (pm) setTimeout(() => { if (!over) onUser(pm.from, pm.to, pm.promo); }, 60); } }
     function say() { const t = chatIn.value.trim().slice(0, 300); if (!t) return; sendNow({ t: 'chat', body: t }); line(me, t, true); chatIn.value = ''; }
     function line(who, text, own) { chatLog.append(h('div', { class: 'club-line' }, h('strong', null, who), ' ', h('span', null, text))); chatLog.scrollTop = chatLog.scrollHeight; if (!own) play('notify'); }
     ch.onmessage = async (e) => {
@@ -3936,9 +4054,9 @@ const { startI18n, getLang, setLang, languages } = __req("js/i18n.js");
 const { installResume } = __req("js/resume.js");
 const { avatar } = __req("js/util.js");
 for (const m of ['append', 'prepend']) { const orig = Element.prototype[m]; Element.prototype[m] = function (...n) { return orig.apply(this, n.filter((x) => x != null && x !== false)); }; }
-const ROUTES = [['/', 'home'], ['/play', 'computer'], ['/play/computer', 'computer'], ['/local', 'local'], ['/online', 'online'], ['/join/:code', 'online'], ['/board', 'board'], ['/me', 'mygames'], ['/profile', 'profile'], ['/puzzles', 'puzzles'], ['/puzzles/:mode', 'puzzles', 'mode'], ['/learn', 'learn'], ['/learn/:id', 'learn', 'lesson'], ['/openings', 'openings'], ['/analysis', 'analysis'], ['/settings', 'settings']]
+const ROUTES = [['/', 'home'], ['/play', 'computer'], ['/play/computer', 'computer'], ['/local', 'local'], ['/online', 'online'], ['/join/:code', 'online'], ['/admin', 'adminlocal'], ['/board', 'board'], ['/me', 'mygames'], ['/profile', 'profile'], ['/puzzles', 'puzzles'], ['/puzzles/:mode', 'puzzles', 'mode'], ['/learn', 'learn'], ['/learn/:id', 'learn', 'lesson'], ['/openings', 'openings'], ['/analysis', 'analysis'], ['/settings', 'settings']]
   .map(([p, mod, fn]) => { const keys = []; const re = new RegExp('^' + p.replace(/:(\w+)/g, (_, k) => { keys.push(k); return '([^/]+)'; }) + '$'); return { re, keys, mod, fn }; });
-const MODULES = { home: 'js/pages/home-static.js', computer: 'js/pages/computer.js', puzzles: 'js/pages/puzzles.js', learn: 'js/pages/learn.js', openings: 'js/pages/openings.js', analysis: 'js/pages/analysis.js', settings: 'js/pages/settings-static.js', local: 'js/pages/local-game.js', board: 'js/pages/board-page.js', online: 'js/pages/online-page.js', mygames: 'js/pages/mygames.js', profile: 'js/pages/profile-page.js' };
+const MODULES = { adminlocal: 'js/pages/admin-local.js', home: 'js/pages/home-static.js', computer: 'js/pages/computer.js', puzzles: 'js/pages/puzzles.js', learn: 'js/pages/learn.js', openings: 'js/pages/openings.js', analysis: 'js/pages/analysis.js', settings: 'js/pages/settings-static.js', local: 'js/pages/local-game.js', board: 'js/pages/board-page.js', online: 'js/pages/online-page.js', mygames: 'js/pages/mygames.js', profile: 'js/pages/profile-page.js' };
 const NAV = [['/play', 'Play'], ['/local', '2 Players'], ['/online', 'Online'], ['/puzzles', 'Puzzles'], ['/learn', 'Learn'], ['/openings', 'Openings'], ['/board', 'Board'], ['/analysis', 'Analysis'], ['/me', 'My Games'], ['/profile', 'Profile'], ['/settings', 'Settings']];
 let cleanup = null, view, navToken = 0;
 function navigate(path) { const t = '#' + path; if (location.hash === t) return route(); location.hash = path; }
