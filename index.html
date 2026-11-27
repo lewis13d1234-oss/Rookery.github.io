@@ -173,6 +173,9 @@ body.menu-open .drawer { display: flex; } .drawer { position: fixed; top: var(--
 .drawer a { color: var(--text); padding: 12px 14px; border-radius: 10px; font-weight: 600; } .drawer a:hover { background: var(--card2); text-decoration: none; }
 body.menu-open .scrim { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 80; }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.hl.cur { outline: 3px solid #fff; outline-offset: -3px; box-shadow: inset 0 0 0 5px rgba(20, 20, 30, .75); z-index: 3; }
+.board:focus { outline: none; } .board:focus-visible { box-shadow: 0 0 0 3px var(--accent, #f2b84b); }
 
 .auth-wrap { display: grid; place-items: center; padding-top: 20px; } .auth-card { width: min(100%, 440px); }
 .form-ok { color: var(--good); margin: 8px 0; } .recovery-code { display: block; font: 700 1.4rem var(--mono); text-align: center; padding: 16px; background: var(--card2); border: 2px dashed var(--accent); border-radius: 12px; letter-spacing: .08em; user-select: all; }
@@ -1793,6 +1796,9 @@ class Board {
     window.addEventListener('pointermove', this._mv = (e) => this.move(e)); window.addEventListener('pointerup', this._up = (e) => this.up(e));
     this.root.addEventListener('contextmenu', (e) => e.preventDefault());
     this.root.addEventListener('keydown', (e) => this.key(e));
+    this.cursor = null; this.live = h('div', { class: 'sr-only', 'aria-live': 'polite', role: 'status' }); this.root.append(this.live);
+    this.root.addEventListener('focus', () => { if (!this.cursor) this.cursor = xyToSq(4, 6, this.o.orientation); this.renderHl(); this.say(this.describeSq(this.cursor) + '. Use the arrow keys to move around the board, Enter to select or move.'); });
+    this.root.addEventListener('blur', () => this.renderHl());
     this.drawSquares(); this.setPosition(this.o.fen, { animate: false });
   }
   destroy() { window.removeEventListener('pointermove', this._mv); window.removeEventListener('pointerup', this._up); this.root.remove(); }
@@ -1843,6 +1849,7 @@ class Board {
     if (this.check) add(this.check, 'check');
     if (this.sel) { add(this.sel, 'sel'); for (const t of this.sel_targets || []) add(t, this.pos[t] ? 'cap' : 'dot'); }
     for (const sq of this.hints) add(sq, 'hint');
+    if (this.cursor && document.activeElement === this.root) add(this.cursor, 'cur');
   }
   clearSel(render = true) { this.sel = null; this.sel_targets = null; if (render) this.renderHl(); }
 
@@ -1891,7 +1898,20 @@ class Board {
       this.promo = box; this.root.append(box);
     });
   }
-  key(e) { if (e.key === 'Escape') { this.clearSel(); } }
+  say(t) { this.live.textContent = ''; setTimeout(() => { this.live.textContent = t; }, 30); }
+  describeSq(sq) { const p = this.pos[sq]; const N = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' }; let t = sq + ', ' + (p ? (p.color === 'w' ? 'white ' : 'black ') + N[p.type] : 'empty'); if (this.sel === sq) t += ', selected'; else if (this.sel_targets?.includes(sq)) t += ', legal move'; return t; }
+  key(e) {
+    if (this.promo || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === 'Escape') { this.clearSel(); this.say('Selection cleared'); return; }
+    const D = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (D) { e.preventDefault(); e.stopPropagation(); const [x, y] = sqToXY(this.cursor || xyToSq(4, 6, this.o.orientation), this.o.orientation); this.cursor = xyToSq(Math.max(0, Math.min(7, x + D[0])), Math.max(0, Math.min(7, y + D[1])), this.o.orientation); this.renderHl(); this.say(this.describeSq(this.cursor)); return; }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault(); e.stopPropagation(); const sq = this.cursor; if (!sq || !this.o.interactive) { this.say('The board is not accepting moves right now.'); return; }
+      if (this.sel && this.sel !== sq && this.sel_targets?.includes(sq)) { this.attempt(this.sel, sq); return; }
+      if (this.canMove(sq)) { this.select(sq); const t = this.sel_targets || []; this.say(t.length ? `Selected ${this.describeSq(sq)}. ${t.length} legal move${t.length > 1 ? 's' : ''}: ${t.join(', ')}. Move to a highlighted square and press Enter.` : `Selected ${this.describeSq(sq)}. It has no legal moves.`); }
+      else { this.clearSel(); this.say(this.describeSq(sq) + ' cannot be moved.'); }
+    }
+  }
   // arrows: [{from,to,color}]
   setArrows(list) { this.arrows = list || []; this.renderArrows(); }
   renderArrows() {
@@ -1978,9 +1998,11 @@ function play(kind) {
     case 'right': tone(600, 0.08, { gain: 0.25 }); return tone(900, 0.12, { gain: 0.25, delay: 0.07 });
   }
 }
-function soundForMove(mv, inCheck) { play(inCheck ? 'check' : mv.flags?.includes('k') || mv.flags?.includes('q') ? 'castle' : mv.captured ? 'capture' : 'move'); }
+let liveEl = null;
+function announce(text) { if (typeof document === 'undefined') return; if (!liveEl) { liveEl = document.createElement('div'); liveEl.className = 'sr-only'; liveEl.setAttribute('aria-live', 'assertive'); liveEl.setAttribute('role', 'status'); document.body.append(liveEl); } liveEl.textContent = ''; setTimeout(() => { liveEl.textContent = text; }, 30); }
+function soundForMove(mv, inCheck) { try { announce((mv.color === 'w' ? 'White' : 'Black') + ' plays ' + mv.san + (inCheck && !/[+#]/.test(mv.san) ? ', check' : '')); } catch {} play(inCheck ? 'check' : mv.flags?.includes('k') || mv.flags?.includes('q') ? 'castle' : mv.captured ? 'capture' : 'move'); }
 
-Object.assign(__exports, { "configureSound": configureSound, "play": play, "soundForMove": soundForMove });
+Object.assign(__exports, { "configureSound": configureSound, "play": play, "announce": announce, "soundForMove": soundForMove });
 };
 __defs["js/learn-common.js"] = function (__req, __exports) {
 // Helpers shared by the puzzles / learn / openings pages (rules-aware board wrapper, tiny rich text, sparkline).
