@@ -189,3 +189,10 @@ h1, h2, h3, .lead { overflow-wrap: break-word; hyphens: auto; } .hero-actions { 
 .owner-panel .op-game { display: flex; flex-direction: column; gap: .3rem; }
 .owner-panel .input, .owner-panel select { min-width: 0; max-width: 100%; }
 @media (max-width: 600px) { .owner-panel { bottom: 64px; } }
+
+.owner-panel summary { cursor: pointer; font-weight: 700; padding: .2rem 0; } .owner-panel details.op-sec[open] > summary { margin-bottom: .4rem; }
+.owner-panel details.op-sec > :not(summary) { margin-top: .4rem; }
+.owner-panel .op-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; }
+.owner-panel .op-stat { background: var(--bg, #14161c); border-radius: 8px; padding: .4rem; text-align: center; display: flex; flex-direction: column; } .owner-panel .op-stat b { font-size: 1.1rem; } .owner-panel .op-stat span { font-size: .7rem; opacity: .7; }
+.owner-panel .op-card { background: var(--bg, #14161c); border-radius: 8px; padding: .5rem; display: flex; flex-direction: column; gap: .3rem; } .owner-panel .op-card:empty { display: none; }
+.pinned-banner { background: #2a3350; color: #fff; }

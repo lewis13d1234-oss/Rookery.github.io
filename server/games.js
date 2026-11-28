@@ -279,6 +279,7 @@ function dropSeeksOf(uid) {
 }
 export const publicSeeks = () => [...seeks.values()].filter((s) => !s.auto).map((s) => ({ id: s.id, user: s.name, userId: s.userId, rating: s.rating, tc: s.tc, rated: s.rated, color: s.color, cat: s.cat }));
 const lobbyListeners = new Set();
+export function clearSeeks() { const n = seeks.size; seeks.clear(); broadcastSeeks(); return n; }
 export function broadcastSeeks() { const m = { t: 'seeks', seeks: publicSeeks() }; for (const ws of lobbyListeners) send(ws, m); }
 
 function pairUp(a, b, tc, rated, colorPref) {

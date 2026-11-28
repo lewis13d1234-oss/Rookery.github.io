@@ -41,14 +41,17 @@ function fullUser(u) {
 }
 
 // ---------------------------------------------------------------- config
+const setting = (k, d = '') => q.get('SELECT value FROM settings WHERE key=?', k)?.value ?? d;
+const setSetting = (k, v) => q.run('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', k, String(v));
 // Build id = hash of everything the browser loads, so it changes only when the site really changes (not on every restart).
 const BUILD = (() => { const h = crypto.createHash('sha1'); const walk = (d) => { for (const n of fs.readdirSync(d).sort()) { const f = path.join(d, n); const st = fs.statSync(f); if (st.isDirectory()) walk(f); else { h.update(f.slice(ROOT.length)); h.update(fs.readFileSync(f)); } } }; try { walk(path.join(ROOT, 'public')); walk(path.join(ROOT, 'shared')); } catch {} return h.digest('hex').slice(0, 12); })();
-route('GET', '/api/config', { auth: false }, () => ({ name: 'Rookery', free: true, build: BUILD, mail: process.env.ROOKERY_MAIL_WEBHOOK ? 'webhook' : 'outbox', cats: core.ALL_CATS }));
+route('GET', '/api/config', { auth: false }, () => ({ name: 'Rookery', free: true, build: BUILD, pinned: setting('pinned'), signups: setting('signups', 'open') === 'open', mail: process.env.ROOKERY_MAIL_WEBHOOK ? 'webhook' : 'outbox', cats: core.ALL_CATS }));
 
 // ---------------------------------------------------------------- auth
 route('GET', '/api/healthz', { auth: false }, () => ({ ok: true, backup: { enabled: backup.status.enabled, lastBackupAt: backup.status.lastBackupAt, error: backup.status.lastError ? 'see server logs' : null } }));
 route('POST', '/api/auth/register', { auth: false, rl: ['reg', 5, 3600_000] }, ({ body, ip, ua, setCookie }) => {
   const username = S.vUsername(body.username), password = S.vPassword(body.password), email = S.vEmail(body.email);
+  if (setting('signups', 'open') !== 'open' && !isOwner({ username })) throw new HttpError(403, 'New sign-ups are closed for now. Please try again later.');
   if (q.get('SELECT 1 FROM users WHERE username=?', username)) throw new HttpError(409, 'That username is taken');
   if (email && q.get('SELECT 1 FROM users WHERE email=?', email)) throw new HttpError(409, 'That email is already registered');
   const recovery = [1, 2, 3].map(() => crypto.randomBytes(2).toString('hex')).join('-');
@@ -532,6 +535,26 @@ route('POST', '/api/owner/users/:name/kick', { auth: 'user' }, ({ user, params }
   needOwner(user); const t = userByName(params.name); if (t.id === user.id) throw bad('Not yourself'); q.run('DELETE FROM sessions WHERE user_id=?', t.id);
   let n = 0; for (const ws of hub.all) if (ws.user && ws.user.id === t.id) { try { ws.close(4000, 'signed out by the owner'); } catch {} n++; } audit(user, 'owner:kick', t.username); return { ok: true, connections: n };
 });
+route('GET', '/api/owner/stats', { auth: 'user' }, ({ user }) => {
+  needOwner(user); const c = (sql, ...a) => q.get(sql, ...a).n; const day = nowMs() - 864e5; let dbSize = 0; try { dbSize = fs.statSync(DB_PATH).size; } catch {}
+  return { build: BUILD, uptimeMin: Math.round((nowMs() - startedAt) / 60000), online: hub.onlineIds().length, connections: hub.all.size, liveGames: G.stats().live, seeks: G.stats().seeks, users: c('SELECT COUNT(*) n FROM users'), newToday: c('SELECT COUNT(*) n FROM users WHERE created_at>?', day), gamesToday: c("SELECT COUNT(*) n FROM games WHERE status='finished' AND created_at>?", day), dbKB: Math.round(dbSize / 1024), backup: { enabled: backup.status.enabled, last: backup.status.lastBackupAt, error: backup.status.lastError }, pinned: setting('pinned'), signupsOpen: setting('signups', 'open') === 'open' };
+});
+route('POST', '/api/owner/settings', { auth: 'user' }, ({ user, body }) => {
+  needOwner(user);
+  if (typeof body.pinned === 'string') { const t = body.pinned.trim() ? vText(body.pinned, { min: 1, max: 200, field: 'Pinned message' }) : ''; setSetting('pinned', t); audit(user, 'owner:pinned', '', t || '(cleared)'); }
+  if (typeof body.signupsOpen === 'boolean') { setSetting('signups', body.signupsOpen ? 'open' : 'closed'); audit(user, 'owner:signups', '', body.signupsOpen ? 'open' : 'closed'); }
+  return { ok: true };
+});
+route('GET', '/api/owner/users/:name', { auth: 'user' }, ({ user, params }) => {
+  needOwner(user); const t = userByName(params.name); core.ensureRatings(t.id);
+  return { id: t.id, username: t.username, email: t.email, role: t.role, owner: isOwner(t), status: t.status, reason: t.status_reason, created_at: t.created_at, last_seen: t.last_seen, online: hub.isOnline(t.id), games: q.get("SELECT COUNT(*) n FROM games WHERE (white_id=? OR black_id=?) AND status='finished'", t.id, t.id).n, ratings: core.ratingsOf(t.id).map((r) => ({ category: r.category, rating: Math.round(r.rating), games: r.games })) };
+});
+route('POST', '/api/owner/users/:name/reset-ratings', { auth: 'user' }, ({ user, params }) => { needOwner(user); const t = userByName(params.name); core.ensureRatings(t.id); q.run('UPDATE ratings SET rating=1500, rd=350, updated_at=? WHERE user_id=?', nowMs(), t.id); audit(user, 'owner:reset-ratings', t.username); return { ok: true }; });
+route('POST', '/api/owner/users/:name/rename', { auth: 'user' }, ({ user, params, body }) => {
+  needOwner(user); const t = userByName(params.name); const n = S.vUsername(body.username); if (isOwner(t)) throw bad('The owner account cannot be renamed here');
+  if (q.get('SELECT 1 FROM users WHERE username=? AND id<>?', n, t.id)) throw new HttpError(409, 'That username is taken'); q.run('UPDATE users SET username=? WHERE id=?', n, t.id); audit(user, 'owner:rename', t.username, '-> ' + n); return { ok: true, username: n };
+});
+route('POST', '/api/owner/seeks/clear', { auth: 'user' }, ({ user }) => { needOwner(user); const n = G.clearSeeks(); audit(user, 'owner:clear-seeks', n + ' seeks'); return { ok: true, cleared: n }; });
 route('POST', '/api/owner/broadcast', { auth: 'user' }, ({ user, body }) => { needOwner(user); const text = vText(body.text, { min: 1, max: 200, field: 'Message' }); hub.broadcast({ t: 'announce', text }); audit(user, 'owner:broadcast', '', text); return { ok: true }; });
 route('POST', '/api/owner/refresh-all', { auth: 'user' }, ({ user }) => { needOwner(user); hub.broadcast({ t: 'announce', refresh: true, text: '' }); audit(user, 'owner:refresh-all', ''); return { ok: true, online: hub.onlineIds().length }; });
 route('POST', '/api/owner/backup-now', { auth: 'user' }, async ({ user }) => { needOwner(user); if (!backup.enabled) throw bad('Backups are not configured'); const done = await backup.snapshot(db, DB_PATH, true); return { ok: done, lastBackupAt: backup.status.lastBackupAt, error: backup.status.lastError }; });

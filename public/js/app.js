@@ -108,4 +108,9 @@ async function boot() {
   route();
 }
 boot();
-import('./update-check.js').then(({ startUpdateCheck }) => get('/api/config').then((c) => startUpdateCheck({ current: c.build, fetchLatest: async () => (await get('/api/config')).build }))).catch(() => {});
+import('./update-check.js').then(({ startUpdateCheck, showBanner }) => get('/api/config').then((c) => {
+  startUpdateCheck({ current: c.build, fetchLatest: async () => (await get('/api/config')).build });
+  // Message pinned by the owner: shown on every visit until the person presses OK (once per message).
+  let seen = ''; try { seen = localStorage.getItem('rk_pinned_seen') || ''; } catch { /* ignore */ }
+  if (c.pinned && c.pinned !== seen) showBanner('pinned-banner', c.pinned, [['OK', (b) => { b.remove(); try { localStorage.setItem('rk_pinned_seen', c.pinned); } catch { /* ignore */ } }]]);
+})).catch(() => {});

@@ -1,11 +1,11 @@
 // Owner protection. Run from the project root: node test/owner.test.cjs
 const { spawn } = require('child_process'); const os = require('os'), path = require('path');
 const port = 4100 + Math.floor(Math.random() * 90), db = path.join(os.tmpdir(), 'rk-own-' + Date.now() + '.db');
-const p = spawn('node', ['--disable-warning=ExperimentalWarning', 'server/index.js'], { env: { ...process.env, PORT: port, ROOKERY_DB: db, ROOKERY_ADMIN_USERNAME: 'Rookery' } });
+const p = spawn('node', ['--disable-warning=ExperimentalWarning', 'server/index.js'], { env: { ...process.env, PORT: port, ROOKERY_DB: db, ROOKERY_ADMIN_USERNAME: 'Rookery', ROOKERY_TRUST_PROXY: '1' } });
 let ok = 0, bad = 0; const t = (n, c) => { c ? ok++ : (bad++, console.log('FAIL', n)); };
-const call = async (cookie, method, u, b) => { const r = await fetch(`http://127.0.0.1:${port}${u}`, { method, headers: { 'content-type': 'application/json', 'x-rookery': '1', cookie: cookie || '' }, body: b ? JSON.stringify(b) : undefined }); const j = await r.json().catch(() => ({})); return { s: r.status, j, ck: (r.headers.getSetCookie?.() || []).map((c) => c.split(';')[0]).join('; ') }; };
+const call = async (cookie, method, u, b) => { const r = await fetch(`http://127.0.0.1:${port}${u}`, { method, headers: { 'content-type': 'application/json', 'x-rookery': '1', 'x-forwarded-for': '10.0.' + Math.floor(Math.random() * 250) + '.' + Math.floor(Math.random() * 250), cookie: cookie || '' }, body: b ? JSON.stringify(b) : undefined }); const j = await r.json().catch(() => ({})); return { s: r.status, j, ck: (r.headers.getSetCookie?.() || []).map((c) => c.split(';')[0]).join('; ') }; };
 (async () => {
-  await new Promise((r) => setTimeout(r, 4000));
+  await new Promise((r) => setTimeout(r, 6000));
   const pw = 'Passw0rd!long';
   const o = await call('', 'POST', '/api/auth/register', { username: 'Rookery', email: 'o@x.io', password: pw }); t('owner registered as admin + owner', o.j.user && o.j.user.role === 'admin' && o.j.user.owner === true);
   const a = await call('', 'POST', '/api/auth/register', { username: 'helper1', email: 'h@x.io', password: pw }); t('second user is not owner', a.j.user && a.j.user.owner === false);
@@ -38,5 +38,16 @@ const call = async (cookie, method, u, b) => { const r = await fetch(`http://127
   const kk = await call(o.ck, 'POST', '/api/owner/users/player2/kick'); const gone = await call(p2.ck, 'GET', '/api/me'); t('kick ends their session', kk.s === 200 && !gone.j.user);
   w1.send(JSON.stringify({ t: 'quick', initial: 600, inc: 0, rated: false })); const ab = await call(o.ck, 'POST', '/api/owner/games/abort-all'); t('abort-all works', ab.s === 200);
   const au = await call(o.ck, 'GET', '/api/admin/audit'); t('actions are in the audit log', au.j.log.some((x) => /owner:result/.test(x.action)));
+  // --- more owner tools
+  const stt = await call(o.ck, 'GET', '/api/owner/stats'); t('stats endpoint', stt.s === 200 && stt.j.users >= 3 && /^[a-f0-9]{12}$/.test(stt.j.build));
+  t('stats refused for non-owner', (await call(p1.ck, 'GET', '/api/owner/stats')).s === 403);
+  const lu = await call(o.ck, 'GET', '/api/owner/users/player1'); t('player look-up', lu.s === 200 && lu.j.username === 'player1' && lu.j.ratings.length >= 4);
+  const pin = await call(o.ck, 'POST', '/api/owner/settings', { pinned: 'Welcome to the beta' }); const cfg = await call('', 'GET', '/api/config'); t('pinned message appears in the public config', pin.s === 200 && cfg.j.pinned === 'Welcome to the beta');
+  await call(o.ck, 'POST', '/api/owner/settings', { signupsOpen: false }); const blocked = await call('', 'POST', '/api/auth/register', { username: 'latecomer', email: 'l@x.io', password: pw }); t('sign-ups can be closed', blocked.s === 403);
+  await call(o.ck, 'POST', '/api/owner/settings', { signupsOpen: true }); const again = await call('', 'POST', '/api/auth/register', { username: 'latecomer', email: 'l@x.io', password: pw }); t('and reopened', again.s === 200);
+  const rn = await call(o.ck, 'POST', '/api/owner/users/latecomer/rename', { username: 'newcomer' }); t('rename', rn.s === 200 && (await call(o.ck, 'GET', '/api/owner/users/newcomer')).s === 200);
+  const rn2 = await call(o.ck, 'POST', '/api/owner/users/newcomer/rename', { username: 'player1' }); t('rename refuses a taken name', rn2.s === 409);
+  await call(o.ck, 'POST', '/api/owner/users/newcomer/rating', { category: 'blitz', rating: 2500 }); await call(o.ck, 'POST', '/api/owner/users/newcomer/reset-ratings'); const lu2 = await call(o.ck, 'GET', '/api/owner/users/newcomer'); t('reset ratings', lu2.j.ratings.every((r) => r.rating === 1500));
+  t('clear lobby', (await call(o.ck, 'POST', '/api/owner/seeks/clear')).s === 200);
   console.log(ok + ' passed, ' + bad + ' failed'); p.kill(); process.exit(bad ? 1 : 0);
 })();

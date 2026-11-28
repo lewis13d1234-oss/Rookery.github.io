@@ -20,7 +20,12 @@ let pass = 0, fail = 0; const ok = (c, n) => { c ? pass++ : fail++; console.log(
   await P.waitForSelector('#announce-banner', { timeout: 6000 }); ok(/Announcement: Server restarts at 6pm/.test(await P.textContent('#announce-banner')), 'players see the announcement as a top banner');
   await P.click('#announce-banner button:has-text("OK")'); ok(await P.locator('#announce-banner').count() === 0, 'banner can be dismissed');
   await O.click('.op-body button:has-text("Ask all to refresh")'); await P.waitForSelector('#update-banner', { timeout: 6000 }); ok(/Refresh the page/.test(await P.textContent('#update-banner')), '"Ask all to refresh" shows the refresh bar to players');
-  ok(/Version [a-f0-9]{12}/.test(await O.textContent('.owner-panel')), 'panel shows the running version');
+  await O.waitForFunction(() => /Version [a-f0-9]{12}/.test(document.querySelector('.owner-panel').textContent), null, { timeout: 5000 }).catch(() => {}); ok(/Version [a-f0-9]{12}/.test(await O.textContent('.owner-panel')), 'panel shows the running version');
+  await O.waitForSelector('.op-stat'); ok(await O.locator('.op-stat').count() === 6, 'panel shows live stats');
+  await O.fill('.op-body input[aria-label="Username"]', 'player9'); await O.click('.op-body button:has-text("Look up")'); await O.waitForSelector('.op-card strong:has-text("player9")'); ok(/online|seen/.test(await O.textContent('.op-card')), 'player look-up card');
+  await O.fill('.op-body input[aria-label="Pinned message"]', 'Beta weekend: expect resets'); await O.click('.op-body button:has-text("Save pinned message")');
+  const Q = await mk('visitor3'); await Q.waitForSelector('#pinned-banner', { timeout: 6000 }); ok(/Beta weekend/.test(await Q.textContent('#pinned-banner')), 'pinned message shows to new visitors');
+  await Q.click('#pinned-banner button:has-text("OK")'); await Q.reload(); await Q.waitForTimeout(1500); ok(await Q.locator('#pinned-banner').count() === 0, 'pinned message stays dismissed after OK');
   if (process.env.SHOT) await O.screenshot({ path: process.env.SHOT }); ok(errs.length === 0, 'no page errors ' + errs.join('|'));
   console.log(`\n${pass} passed, ${fail} failed`); await b.close(); srv.kill(); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('ERR', e.message); srv.kill(); process.exit(1); });
