@@ -1,6 +1,6 @@
 // REST client, session/preferences store and the shared WebSocket connection.
 import { toast } from './util.js';
-import { showBanner } from './update-check.js';
+import { showBanner, updateBanner } from './update-check.js';
 import { configureSound, play } from './sound.js';
 
 export const state = { user: null, prefs: {}, ws: null, wsReady: false, listeners: new Map(), config: null, offset: 0 };
@@ -58,7 +58,7 @@ export function connectWs() {
   if (state.ws && state.ws.readyState <= 1) return;
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   state.ws = ws;
-  ws.onopen = () => { state.wsReady = true; backoff = 500; emit('ws:open'); clearInterval(pingT); pingT = setInterval(() => sendWs({ t: 'ping', c: Date.now() }), 15000); sendWs({ t: 'ping', c: Date.now() }); };
+  ws.onopen = () => { state.wsReady = true; backoff = 500; emit('ws:open'); window.dispatchEvent(new Event('rk:ws-open')); clearInterval(pingT); pingT = setInterval(() => sendWs({ t: 'ping', c: Date.now() }), 15000); sendWs({ t: 'ping', c: Date.now() }); };
   ws.onmessage = (e) => {
     let m; try { m = JSON.parse(e.data); } catch { return; }
     if (m.serverNow && m.t !== 'move') state.offset = m.serverNow - Date.now();
@@ -76,7 +76,7 @@ export const serverNow = () => Date.now() + state.offset;
 export function initGlobalHandlers(navigate) {
   on('ws:achievement', (m) => { toast(`🏅 Achievement unlocked: ${m.achievement.name}`, 'success', 6000); play('right'); });
   on('ws:notice', (m) => toast(m.text, 'info', 6000));
-  on('ws:announce', (m) => showBanner('announce-banner', 'Announcement: ' + m.text, [['OK', (b) => b.remove()]]));
+  on('ws:announce', (m) => m.refresh ? updateBanner() : showBanner('announce-banner', 'Announcement: ' + m.text, [['OK', (b) => b.remove()]]));
   on('ws:friend_request', (m) => { toast(`${m.from} sent you a friend request`, 'info', 6000); play('notify'); });
   on('ws:dm', (m) => { if (!location.hash.startsWith('#/messages')) { toast(`✉ ${m.from}: ${m.body.slice(0, 60)}`, 'info', 5000); play('notify'); } });
   on('ws:challenge', (m) => {

@@ -19,6 +19,8 @@ let pass = 0, fail = 0; const ok = (c, n) => { c ? pass++ : fail++; console.log(
   await O.fill('.op-body input[aria-label="Announcement"]', 'Server restarts at 6pm'); await O.click('.op-body button:has-text("Announce")');
   await P.waitForSelector('#announce-banner', { timeout: 6000 }); ok(/Announcement: Server restarts at 6pm/.test(await P.textContent('#announce-banner')), 'players see the announcement as a top banner');
   await P.click('#announce-banner button:has-text("OK")'); ok(await P.locator('#announce-banner').count() === 0, 'banner can be dismissed');
+  await O.click('.op-body button:has-text("Ask all to refresh")'); await P.waitForSelector('#update-banner', { timeout: 6000 }); ok(/Refresh the page/.test(await P.textContent('#update-banner')), '"Ask all to refresh" shows the refresh bar to players');
+  ok(/Version [a-f0-9]{12}/.test(await O.textContent('.owner-panel')), 'panel shows the running version');
   if (process.env.SHOT) await O.screenshot({ path: process.env.SHOT }); ok(errs.length === 0, 'no page errors ' + errs.join('|'));
   console.log(`\n${pass} passed, ${fail} failed`); await b.close(); srv.kill(); process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('ERR', e.message); srv.kill(); process.exit(1); });

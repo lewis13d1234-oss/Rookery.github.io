@@ -1,5 +1,5 @@
 // Tells people who have the site open on an old version to refresh the page.
-const EVERY = 5 * 60_000, MIN_GAP = 60_000;
+const EVERY = 2 * 60_000, MIN_GAP = 20_000;
 
 // A bar across the top of the page: used for "new version" and for announcements from the owner.
 export function showBanner(id, text, buttons) {
@@ -9,18 +9,19 @@ export function showBanner(id, text, buttons) {
   for (const [label, fn, ghost] of buttons) { const x = document.createElement('button'); x.className = 'btn small' + (ghost ? ' ghost' : ''); x.textContent = label; x.onclick = () => fn(b); b.append(x); }
   (document.getElementById('app') || document.body).prepend(b); return b;
 }
-const banner = () => showBanner('update-banner', 'A new version of Rookery is available. Refresh the page to update.', [['Refresh', () => location.reload()], ['Later', (b) => b.remove(), true]]);
+export const updateBanner = () => showBanner('update-banner', 'A new version of Rookery is available. Refresh the page to update.', [['Refresh', () => location.reload()], ['Later', (b) => b.remove(), true]]);
 
 export function startUpdateCheck({ current, fetchLatest }) {
   if (!current || typeof fetchLatest !== 'function') return;
   let last = 0, shown = false;
-  const check = async () => {
-    if (shown || Date.now() - last < MIN_GAP) return; last = Date.now();
-    try { const l = await fetchLatest(); if (l && l !== current) { shown = true; banner(); } } catch { /* offline or blocked: try again later */ }
+  const check = async (force) => {
+    if (shown || (force !== true && Date.now() - last < MIN_GAP)) return; last = Date.now();
+    try { const l = await fetchLatest(); if (l && l !== current) { shown = true; updateBanner(); } } catch { /* offline or blocked: try again later */ }
   };
   setInterval(check, EVERY);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
-  window.addEventListener('online', check);
+  window.addEventListener('online', check); window.addEventListener('focus', check); window.addEventListener('pageshow', check);
+  window.addEventListener('rk:ws-open', () => setTimeout(() => check(true), 1500)); // the server restarts when a new version is deployed, so a reconnect is the best moment to look
 }
 
 // Single-file edition: the build id sits in a <meta> tag near the top of the page, so read only the first few KB.

@@ -509,7 +509,7 @@ const needOwner = (u) => { if (!isOwner(u)) throw new HttpError(403, 'Owner only
 const liveGame = (id) => { const g = G.live.get(String(id)); if (!g || g.status !== 'active') throw new HttpError(404, 'That game is not in progress'); return g; };
 route('GET', '/api/owner/info', { auth: 'user' }, ({ user }) => {
   needOwner(user);
-  return { categories: core.ALL_CATS, achievements: q.all('SELECT id, name FROM achievements ORDER BY id'), games: [...G.live.values()].filter((g) => g.status === 'active').map((g) => ({ id: g.id, white: g.white.name, black: g.black.name, tc: g.tc, cat: g.cat, plies: g.ply, rated: !!g.rated, private: !!g.private, spectators: g.spectators.size })) };
+  return { build: BUILD, categories: core.ALL_CATS, achievements: q.all('SELECT id, name FROM achievements ORDER BY id'), games: [...G.live.values()].filter((g) => g.status === 'active').map((g) => ({ id: g.id, white: g.white.name, black: g.black.name, tc: g.tc, cat: g.cat, plies: g.ply, rated: !!g.rated, private: !!g.private, spectators: g.spectators.size })) };
 });
 route('POST', '/api/owner/games/:id/result', { auth: 'user' }, ({ user, params, body }) => {
   needOwner(user); const g = liveGame(params.id); if (!['1-0', '0-1', '1/2-1/2'].includes(body.result)) throw bad('Invalid result');
@@ -533,6 +533,7 @@ route('POST', '/api/owner/users/:name/kick', { auth: 'user' }, ({ user, params }
   let n = 0; for (const ws of hub.all) if (ws.user && ws.user.id === t.id) { try { ws.close(4000, 'signed out by the owner'); } catch {} n++; } audit(user, 'owner:kick', t.username); return { ok: true, connections: n };
 });
 route('POST', '/api/owner/broadcast', { auth: 'user' }, ({ user, body }) => { needOwner(user); const text = vText(body.text, { min: 1, max: 200, field: 'Message' }); hub.broadcast({ t: 'announce', text }); audit(user, 'owner:broadcast', '', text); return { ok: true }; });
+route('POST', '/api/owner/refresh-all', { auth: 'user' }, ({ user }) => { needOwner(user); hub.broadcast({ t: 'announce', refresh: true, text: '' }); audit(user, 'owner:refresh-all', ''); return { ok: true, online: hub.onlineIds().length }; });
 route('POST', '/api/owner/backup-now', { auth: 'user' }, async ({ user }) => { needOwner(user); if (!backup.enabled) throw bad('Backups are not configured'); const done = await backup.snapshot(db, DB_PATH, true); return { ok: done, lastBackupAt: backup.status.lastBackupAt, error: backup.status.lastError }; });
 route('GET', '/api/admin/stats', { auth: 'user' }, ({ user }) => {
   needMod(user); const day = nowMs() - 864e5;
