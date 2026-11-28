@@ -29,8 +29,8 @@ export default async function admin(root, ctx) {
       async function load() {
         const { users } = await get('/api/admin/users?q=' + encodeURIComponent(input.value.trim())); clear(out);
         out.append(h('div', { class: 'card flush table-wrap' }, h('table', { class: 'table' }, h('thead', null, h('tr', null, ['User', 'Email', 'Role', 'Status', 'Joined', 'Flags', ''].map((x) => h('th', null, x)))),
-          h('tbody', null, users.map((u) => h('tr', null, h('td', null, userLink(u.username)), h('td', { class: 'small' }, u.email), h('td', null, u.role), h('td', null, h('span', { class: 'pill st-' + u.status }, u.status), u.status_reason ? h('div', { class: 'muted small' }, u.status_reason) : null), h('td', { class: 'small' }, ago(u.created_at)), h('td', null, u.fair_flags || 0),
-            h('td', null, h('div', { class: 'row' }, u.id === state.user.id ? null : [
+          h('tbody', null, users.map((u) => h('tr', null, h('td', null, userLink(u.username)), h('td', { class: 'small' }, u.email), h('td', null, u.owner ? 'owner' : u.role), h('td', null, h('span', { class: 'pill st-' + u.status }, u.status), u.status_reason ? h('div', { class: 'muted small' }, u.status_reason) : null), h('td', { class: 'small' }, ago(u.created_at)), h('td', null, u.fair_flags || 0),
+            h('td', null, h('div', { class: 'row' }, u.id === state.user.id ? null : u.owner ? h('span', { class: 'muted small' }, 'Protected: owner') : [
               u.status === 'active' ? [h('button', { class: 'btn small', onclick: () => moderate(u, 'suspended') }, 'Suspend'), h('button', { class: 'btn small danger', onclick: () => moderate(u, 'banned') }, 'Ban')] : h('button', { class: 'btn small', onclick: () => moderate(u, 'active') }, 'Restore'),
               isAdmin ? h('button', { class: 'btn small ghost', onclick: wrap(async () => { const r = await post(`/api/admin/users/${u.id}/reset-link`); modal('Password reset link', h('div', null, h('p', null, 'Give this one-hour link to the user:'), h('input', { readOnly: true, value: r.link, onfocus: (e) => e.target.select() }))); }) }, 'Reset link') : null,
               isAdmin ? h('select', { 'aria-label': 'Role for ' + u.username, onchange: async (e) => { try { await post(`/api/admin/users/${u.id}/role`, { role: e.target.value }); toast('Role updated', 'success'); } catch (er) { toast(er.message, 'error'); load(); } } }, ['user', 'mod', 'admin'].map((r) => h('option', { value: r, selected: r === u.role }, r))) : null]))))))));
@@ -102,7 +102,7 @@ export default async function admin(root, ctx) {
   const items = [['overview', 'Overview'], ['users', 'Users'], ['reports', 'Reports'], ['flags', 'Fair play'], ['tournaments', 'Tournaments'], ...(isAdmin ? [['puzzles', 'Puzzles'], ['lessons', 'Lessons'], ['audit', 'Audit log']] : [])];
   let token = 0;
   async function show(id) { const my = ++token; clear(panel); panel.append(spinner()); try { const el = await views[id](); if (my !== token) return; clear(panel); panel.append(el); } catch (e) { if (my !== token) return; clear(panel); panel.append(errorBox(e.message)); } }
-  root.append(h('h1', null, '🛡 Admin dashboard'), h('p', { class: 'muted' }, 'Signed in as ' + role + '.'), tabs(items, 'overview', show), panel);
+  root.append(h('h1', null, '🛡 Admin dashboard'), h('p', { class: 'muted' }, 'Signed in as ' + (state.user.owner ? 'owner' : role) + '.'), tabs(items, 'overview', show), panel);
   ctx.onCleanup(() => clearTimeout(refreshT));
   show('overview');
 }

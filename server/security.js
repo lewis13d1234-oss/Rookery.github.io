@@ -88,6 +88,8 @@ export function userFromToken(token) {
 }
 /** Lift expired suspensions, mark standing. Returns the user row with `blocked` reason if not allowed. */
 export function checkStanding(u) {
+  const owner = (process.env.ROOKERY_ADMIN_USERNAME || '').trim().toLowerCase(); // the owner is always an active admin
+  if (owner && String(u.username).toLowerCase() === owner && (u.status !== 'active' || u.role !== 'admin')) { q.run("UPDATE users SET status='active', suspended_until=NULL, role='admin' WHERE id=?", u.id); u.status = 'active'; u.role = 'admin'; u.suspended_until = null; }
   if (u.status === 'suspended' && u.suspended_until && u.suspended_until < Date.now()) {
     q.run("UPDATE users SET status='active', suspended_until=NULL WHERE id=?", u.id);
     u.status = 'active';

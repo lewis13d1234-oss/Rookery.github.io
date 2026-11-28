@@ -19,7 +19,9 @@ const route = (method, pattern, opts, fn) => { if (typeof opts === 'function') {
 const startedAt = Date.now();
 
 const avatarUrl = (u) => !u.avatar ? null : u.avatar.startsWith('data:') ? `/api/avatar/${encodeURIComponent(u.username)}?v=${u.avatar.length}` : u.avatar;
-const pub = (u) => ({ id: u.id, username: u.username, avatar: avatarUrl(u), country: u.country, online: hub.isOnline(u.id), role: u.role });
+// The owner is the account named in ROOKERY_ADMIN_USERNAME. Nobody else (including other admins) can ban, suspend, demote or reset it.
+export const isOwner = (u) => { const o = (process.env.ROOKERY_ADMIN_USERNAME || '').trim().toLowerCase(); return !!(u && o && String(u.username).toLowerCase() === o); };
+const pub = (u) => ({ id: u.id, username: u.username, avatar: avatarUrl(u), country: u.country, online: hub.isOnline(u.id), role: u.role, owner: isOwner(u) });
 const nowMs = () => Date.now();
 const userByName = (n) => { const u = q.get('SELECT * FROM users WHERE username=?', String(n || '')); if (!u) throw new HttpError(404, 'User not found'); return u; };
 const blockedEither = (a, b) => !!q.get('SELECT 1 FROM blocks WHERE (user_id=? AND blocked_id=?) OR (user_id=? AND blocked_id=?)', a, b, b, a);
@@ -520,10 +522,11 @@ route('GET', '/api/admin/health', { auth: 'user' }, ({ user }) => {
 });
 route('GET', '/api/admin/users', { auth: 'user' }, ({ user, query }) => {
   needMod(user); const t = String(query.q || '').replace(/[%_\\]/g, '');
-  return { users: q.all("SELECT id,username,email,role,status,suspended_until,status_reason,created_at,last_seen,fair_flags FROM users WHERE username LIKE ? OR email LIKE ? ORDER BY created_at DESC LIMIT 100", '%' + t + '%', '%' + t + '%') };
+  return { users: q.all("SELECT id,username,email,role,status,suspended_until,status_reason,created_at,last_seen,fair_flags FROM users WHERE username LIKE ? OR email LIKE ? ORDER BY created_at DESC LIMIT 100", '%' + t + '%', '%' + t + '%').map((u) => ({ ...u, owner: isOwner(u) })) };
 });
 route('POST', '/api/admin/users/:id/status', { auth: 'user' }, ({ user, params, body }) => {
   needMod(user); const t = q.get('SELECT * FROM users WHERE id=?', params.id); if (!t) throw new HttpError(404, 'User not found');
+  if (isOwner(t)) throw new HttpError(403, 'The owner cannot be moderated');
   if (t.role === 'admin' && user.role !== 'admin') throw new HttpError(403, 'Cannot moderate administrators'); if (t.id === user.id) throw bad('You cannot moderate yourself');
   const status = ['active', 'suspended', 'banned'].includes(body.status) ? body.status : null; if (!status) throw bad('Invalid status');
   const until = status === 'suspended' ? nowMs() + Math.min(365, Math.max(0.01, Number(body.days) || 1)) * 864e5 : null;
@@ -531,13 +534,13 @@ route('POST', '/api/admin/users/:id/status', { auth: 'user' }, ({ user, params, 
   if (status !== 'active') q.run('DELETE FROM sessions WHERE user_id=?', t.id);
   audit(user, 'status:' + status, t.username, body.reason); return { ok: true };
 });
-route('POST', '/api/admin/users/:id/role', { auth: 'user' }, ({ user, params, body }) => { needAdmin(user); if (!['user', 'mod', 'admin'].includes(body.role)) throw bad('Invalid role'); if (Number(params.id) === user.id) throw bad('Cannot change your own role'); q.run('UPDATE users SET role=? WHERE id=?', body.role, params.id); audit(user, 'role:' + body.role, params.id); return { ok: true }; });
-route('POST', '/api/admin/users/:id/reset-link', { auth: 'user' }, ({ user, params, origin }) => { needAdmin(user); const tok = S.randToken(24); q.run('INSERT INTO reset_tokens (token_hash,user_id,expires_at) VALUES (?,?,?)', S.sha256(tok), params.id, nowMs() + 3600_000); audit(user, 'reset-link', params.id); return { link: `${origin}/#/reset/${tok}` }; });
+route('POST', '/api/admin/users/:id/role', { auth: 'user' }, ({ user, params, body }) => { needAdmin(user); if (!['user', 'mod', 'admin'].includes(body.role)) throw bad('Invalid role'); if (Number(params.id) === user.id) throw bad('Cannot change your own role'); if (isOwner(q.get('SELECT username FROM users WHERE id=?', params.id))) throw new HttpError(403, 'The owner\'s role cannot be changed'); q.run('UPDATE users SET role=? WHERE id=?', body.role, params.id); audit(user, 'role:' + body.role, params.id); return { ok: true }; });
+route('POST', '/api/admin/users/:id/reset-link', { auth: 'user' }, ({ user, params, origin }) => { needAdmin(user); if (isOwner(q.get('SELECT username FROM users WHERE id=?', params.id)) && !isOwner(user)) throw new HttpError(403, 'Only the owner can reset the owner\'s password'); const tok = S.randToken(24); q.run('INSERT INTO reset_tokens (token_hash,user_id,expires_at) VALUES (?,?,?)', S.sha256(tok), params.id, nowMs() + 3600_000); audit(user, 'reset-link', params.id); return { link: `${origin}/#/reset/${tok}` }; });
 route('GET', '/api/admin/reports', { auth: 'user' }, ({ user, query }) => { needMod(user); const st = ['open', 'actioned', 'dismissed'].includes(query.status) ? query.status : 'open'; return { reports: q.all('SELECT r.*, (SELECT username FROM users WHERE id=r.reporter_id) reporter, (SELECT username FROM users WHERE id=r.target_id) target FROM reports r WHERE status=? ORDER BY created_at DESC LIMIT 100', st) }; });
 route('POST', '/api/admin/reports/:id/resolve', { auth: 'user' }, ({ user, params, body }) => {
   needMod(user); const r = q.get('SELECT * FROM reports WHERE id=?', params.id); if (!r) throw new HttpError(404, 'Report not found');
   const action = ['dismiss', 'warn', 'suspend', 'ban'].includes(body.action) ? body.action : 'dismiss';
-  if (action === 'suspend' || action === 'ban') { const t = q.get('SELECT * FROM users WHERE id=?', r.target_id); if (t.role === 'admin') throw new HttpError(403, 'Cannot moderate administrators'); q.run('UPDATE users SET status=?, suspended_until=?, status_reason=? WHERE id=?', action === 'ban' ? 'banned' : 'suspended', action === 'suspend' ? nowMs() + (Number(body.days) || 3) * 864e5 : null, 'Report #' + r.id + ': ' + r.reason, t.id); q.run('DELETE FROM sessions WHERE user_id=?', t.id); }
+  if (action === 'suspend' || action === 'ban') { const t = q.get('SELECT * FROM users WHERE id=?', r.target_id); if (isOwner(t)) throw new HttpError(403, 'The owner cannot be moderated'); if (t.role === 'admin') throw new HttpError(403, 'Cannot moderate administrators'); q.run('UPDATE users SET status=?, suspended_until=?, status_reason=? WHERE id=?', action === 'ban' ? 'banned' : 'suspended', action === 'suspend' ? nowMs() + (Number(body.days) || 3) * 864e5 : null, 'Report #' + r.id + ': ' + r.reason, t.id); q.run('DELETE FROM sessions WHERE user_id=?', t.id); }
   if (action === 'warn') hub.sendUser(r.target_id, { t: 'notice', text: 'A moderator has warned you about your conduct. Please play fair and be respectful.' });
   q.run('UPDATE reports SET status=?, resolved_by=?, note=?, resolved_at=? WHERE id=?', action === 'dismiss' ? 'dismissed' : 'actioned', user.id, vText(body.note || '', { max: 300, field: 'Note' }), nowMs(), r.id);
   audit(user, 'report:' + action, r.id); return { ok: true };
