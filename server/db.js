@@ -4,12 +4,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LESSONS } from '../data/lessons.js';
+import { restore } from './backup.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.join(here, '..');
 export const DB_PATH = process.env.ROOKERY_DB || path.join(ROOT, 'data', 'rookery.db');
 if (DB_PATH !== ':memory:') fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
+await restore(DB_PATH); // no-op unless ROOKERY_BACKUP_REPO / ROOKERY_BACKUP_TOKEN are set
 export const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA synchronous = NORMAL;');
 

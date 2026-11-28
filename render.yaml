@@ -14,6 +14,12 @@ services:
         value: "1"
       - key: ROOKERY_ADMIN_USERNAME
         sync: false       # Render asks you for this when you create the service: the username that becomes admin
+      - key: ROOKERY_BACKUP_REPO
+        sync: false       # free permanent storage, see DEPLOY.md: your private data repo, e.g. lewis13d1234-oss/rookery-data
+      - key: ROOKERY_BACKUP_TOKEN
+        sync: false       # GitHub fine-grained token for that repo only
+      - key: ROOKERY_BACKUP_KEY
+        sync: false       # any long random phrase: encrypts the saved copies
     # To keep data between deploys, switch to a paid plan, uncomment the disk, and set ROOKERY_DB:
     # plan: starter
     # disk:

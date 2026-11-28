@@ -2,7 +2,8 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer } from 'ws';
-import { init, ROOT, q } from './db.js';
+import { init, ROOT, q, db, DB_PATH } from './db.js';
+import { startBackups, flush } from './backup.js';
 import * as S from './security.js';
 import * as hub from './hub.js';
 import * as G from './games.js';
@@ -134,5 +135,7 @@ let last = Date.now(); setInterval(() => { const n = Date.now(); globalThis.__la
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename) || process.env.ROOKERY_AUTOSTART === '1') {
   server.listen(PORT, HOST, () => console.log(`Rookery listening on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
+  startBackups(db, DB_PATH);
 }
-process.on('SIGTERM', () => process.exit(0));
+const stop = () => { flush(db, DB_PATH).finally(() => process.exit(0)); setTimeout(() => process.exit(0), 20_000).unref(); };
+process.on('SIGTERM', stop); process.on('SIGINT', stop);

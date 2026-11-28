@@ -6,6 +6,7 @@ import * as S from './security.js';
 import { HttpError, bad, vText, vInt } from './security.js';
 import * as core from './core.js';
 import * as hub from './hub.js';
+import * as backup from './backup.js';
 import * as G from './games.js';
 import * as T from './tournaments.js';
 import { Chess, START_FEN } from '../shared/chess.js';
@@ -43,7 +44,7 @@ const BUILD = (() => { const h = crypto.createHash('sha1'); const walk = (d) => 
 route('GET', '/api/config', { auth: false }, () => ({ name: 'Rookery', free: true, build: BUILD, mail: process.env.ROOKERY_MAIL_WEBHOOK ? 'webhook' : 'outbox', cats: core.ALL_CATS }));
 
 // ---------------------------------------------------------------- auth
-route('GET', '/api/healthz', { auth: false }, () => ({ ok: true }));
+route('GET', '/api/healthz', { auth: false }, () => ({ ok: true, backup: { enabled: backup.status.enabled, lastBackupAt: backup.status.lastBackupAt, error: backup.status.lastError ? 'see server logs' : null } }));
 route('POST', '/api/auth/register', { auth: false, rl: ['reg', 5, 3600_000] }, ({ body, ip, ua, setCookie }) => {
   const username = S.vUsername(body.username), password = S.vPassword(body.password), email = S.vEmail(body.email);
   if (q.get('SELECT 1 FROM users WHERE username=?', username)) throw new HttpError(409, 'That username is taken');
