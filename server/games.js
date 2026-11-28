@@ -57,12 +57,18 @@ class Game {
 
 function ratingOf(uid, cat) { return uid ? Math.round(getRating(uid, cat).rating) : null; }
 
+// Profile picture for a player: a URL (uploaded photo), a preset name, or null.
+function avatarOf(p) {
+  if (!p.id) return null; const u = q.get('SELECT username, avatar FROM users WHERE id=?', p.id); if (!u || !u.avatar) return null;
+  return u.avatar.startsWith('data:') ? `/api/avatar/${encodeURIComponent(u.username)}?v=${u.avatar.length}` : u.avatar;
+}
+
 export function view(g, forUid = null) {
   const now = Date.now();
   return {
     id: g.id, status: g.status, tc: g.tc, cat: g.cat, rated: g.rated, private: g.private,
-    white: { ...g.white, rating: ratingOf(g.white.id, g.cat), online: g.white.id ? isOnline(g.white.id) : false },
-    black: { ...g.black, rating: ratingOf(g.black.id, g.cat), online: g.black.id ? isOnline(g.black.id) : false },
+    white: { ...g.white, avatar: avatarOf(g.white), rating: ratingOf(g.white.id, g.cat), online: g.white.id ? isOnline(g.white.id) : false },
+    black: { ...g.black, avatar: avatarOf(g.black), rating: ratingOf(g.black.id, g.cat), online: g.black.id ? isOnline(g.black.id) : false },
     startFen: g.startFen, fen: g.chess.fen(), moves: g.chess.history(), uci: g.chess.historyUci(),
     clocks: g.liveClocks(now), turn: g.turn ? 'b' : 'w', serverNow: now, clockRunning: g.clockRunning(),
     result: g.result, reason: g.reason, drawOffer: g.drawOffer, rematch: g.rematch, ratingChange: g.ratingChange,

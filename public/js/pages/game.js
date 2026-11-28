@@ -24,7 +24,7 @@ export default async function game(root, ctx) {
   function build() {
     const o = (mine() === 'b') ? 'b' : 'w'; const top = o === 'w' ? 'b' : 'w';
     const pl = (c) => (c === 'w' ? G.white : G.black);
-    const strip = (c, clk) => { const p = pl(c); return playerStrip(avatar({ username: p.name }, 34), p.id ? userLink(p.name) : h('span', null, p.name), p.rating ? `(${p.rating})` : '', clk); };
+    const strip = (c, clk) => { const p = pl(c); return playerStrip(avatar({ username: p.name, avatar: p.avatar }, 34), p.id ? userLink(p.name) : h('span', null, p.name), p.rating ? `(${p.rating})` : '', clk); };
     clear(topHolder); clear(botHolder); topStrip = strip(top, topClock); botStrip = strip(o, botClock); topHolder.append(topStrip); botHolder.append(botStrip);
     topClock.dataset.c = top; botClock.dataset.c = o;
     if (!board) board = new Board(boardHost, { orientation: o, set: state.prefs.pieces, coords: state.prefs.coords !== false, animate: state.prefs.animations !== false, interactive: false, legalTargets: (sq) => [...new Set(chess.moves({ square: sq, verbose: true }).map((m) => m.to))], onMove: onUserMove });
