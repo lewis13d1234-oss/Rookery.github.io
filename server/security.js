@@ -28,7 +28,8 @@ export const bad = (m) => new HttpError(400, m);
 
 export function vUsername(u) {
   if (typeof u !== 'string' || !/^[A-Za-z0-9_-]{3,20}$/.test(u)) throw bad('Username must be 3–20 characters: letters, numbers, _ or -');
-  if (/^(admin|root|system|rookery|moderator|support|computer|ai)$/i.test(u)) throw bad('That username is reserved');
+  const owner = (process.env.ROOKERY_ADMIN_USERNAME || '').trim().toLowerCase();
+  if (u.toLowerCase() !== owner && /^(admin|root|system|rookery|moderator|support|computer|ai)$/i.test(u)) throw bad('That username is reserved');
   return u;
 }
 export function vPassword(p) {
