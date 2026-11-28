@@ -18,5 +18,25 @@ const call = async (cookie, method, u, b) => { const r = await fetch(`http://127
   const lst = await call(o.ck, 'GET', '/api/admin/users?q=Rookery'); t('user list marks the owner', lst.j.users.some((u) => u.username === 'Rookery' && u.owner === true));
   const me = await call(o.ck, 'GET', '/api/me'); t('owner still signed in and active', me.s === 200 && me.j.user && me.j.user.status === 'active');
   const r5 = await call(o.ck, 'POST', `/api/admin/users/${aid}/status`, { status: 'banned', reason: 'test' }); t('owner CAN ban an admin', r5.s === 200);
+  // --- owner tools
+  const WebSocket = require('ws');
+  const p1 = await call('', 'POST', '/api/auth/register', { username: 'player1', email: 'p1@x.io', password: pw }), p2 = await call('', 'POST', '/api/auth/register', { username: 'player2', email: 'p2@x.io', password: pw });
+  const open = (ck) => new Promise((res) => { const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, { headers: { cookie: ck, origin: `http://127.0.0.1:${port}` } }); ws.msgs = []; ws.on('message', (d) => ws.msgs.push(JSON.parse(d))); ws.on('open', () => res(ws)); });
+  const w1 = await open(p1.ck), w2 = await open(p2.ck); const until = async (ws, f, ms = 5000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const m = ws.msgs.find(f); if (m) return m; await new Promise((r) => setTimeout(r, 30)); } return null; };
+  w1.send(JSON.stringify({ t: 'quick', initial: 300, inc: 0, rated: true })); w2.send(JSON.stringify({ t: 'quick', initial: 300, inc: 0, rated: true }));
+  const gm = await until(w1, (m) => m.t === 'game'); t('two players are paired', !!gm);
+  const gid = gm.game.id;
+  const info = await call(o.ck, 'GET', '/api/owner/info'); t('owner sees the live game', info.j.games.some((g) => g.id === gid));
+  t('admin (not owner) is refused owner tools', (await call(a.ck, 'GET', '/api/owner/info')).s !== 200);
+  const rr = await call(p1.ck, 'POST', `/api/owner/games/${gid}/result`, { result: '1-0' }); t('player cannot force a result', rr.s === 403);
+  const fr = await call(o.ck, 'POST', `/api/owner/games/${gid}/result`, { result: '1-0', unrated: true }); t('owner forces a result', fr.s === 200);
+  const end = await until(w1, (m) => m.t === 'end'); t('players are told it was adjudicated', end && /adjudicated by the site owner/.test(end.reason) && end.result === '1-0');
+  t('ratings unchanged when unrated is set', !!end && (!end.ratingChange || (end.ratingChange.white.after == null && end.ratingChange.black.after == null)));
+  const rt = await call(o.ck, 'POST', '/api/owner/users/player2/rating', { category: 'blitz', rating: 2222 }); const pm = await call(p2.ck, 'GET', '/api/me'); t('owner sets a rating', rt.s === 200 && pm.j.user.ratings.some((x) => x.category === 'blitz' && Math.round(x.rating) === 2222));
+  const ac = await call(o.ck, 'POST', '/api/owner/users/player2/achievements', { all: true }); t('owner grants all achievements', ac.s === 200 && ac.j.granted >= 1);
+  const bc = await call(o.ck, 'POST', '/api/owner/broadcast', { text: 'hello all' }); const nt = await until(w2, (m) => m.t === 'notice' && /hello all/.test(m.text)); t('announcement reaches players', bc.s === 200 && !!nt);
+  const kk = await call(o.ck, 'POST', '/api/owner/users/player2/kick'); const gone = await call(p2.ck, 'GET', '/api/me'); t('kick ends their session', kk.s === 200 && !gone.j.user);
+  w1.send(JSON.stringify({ t: 'quick', initial: 600, inc: 0, rated: false })); const ab = await call(o.ck, 'POST', '/api/owner/games/abort-all'); t('abort-all works', ab.s === 200);
+  const au = await call(o.ck, 'GET', '/api/admin/audit'); t('actions are in the audit log', au.j.log.some((x) => /owner:result/.test(x.action)));
   console.log(ok + ' passed, ' + bad + ' failed'); p.kill(); process.exit(bad ? 1 : 0);
 })();

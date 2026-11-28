@@ -504,6 +504,36 @@ route('POST', '/api/tournaments/:id/leave', { auth: 'user' }, ({ params, user })
 // ---------------------------------------------------------------- admin / moderation
 const needMod = (u) => { if (!['admin', 'mod'].includes(u.role)) throw new HttpError(403, 'Moderators only'); };
 const needAdmin = (u) => { if (u.role !== 'admin') throw new HttpError(403, 'Administrators only'); };
+// ---------------------------------------------------------------- owner tools (owner only, all logged in the audit log)
+const needOwner = (u) => { if (!isOwner(u)) throw new HttpError(403, 'Owner only'); };
+const liveGame = (id) => { const g = G.live.get(String(id)); if (!g || g.status !== 'active') throw new HttpError(404, 'That game is not in progress'); return g; };
+route('GET', '/api/owner/info', { auth: 'user' }, ({ user }) => {
+  needOwner(user);
+  return { categories: core.ALL_CATS, achievements: q.all('SELECT id, name FROM achievements ORDER BY id'), games: [...G.live.values()].filter((g) => g.status === 'active').map((g) => ({ id: g.id, white: g.white.name, black: g.black.name, tc: g.tc, cat: g.cat, plies: g.ply, rated: !!g.rated, private: !!g.private, spectators: g.spectators.size })) };
+});
+route('POST', '/api/owner/games/:id/result', { auth: 'user' }, ({ user, params, body }) => {
+  needOwner(user); const g = liveGame(params.id); if (!['1-0', '0-1', '1/2-1/2'].includes(body.result)) throw bad('Invalid result');
+  if (body.unrated) g.rated = false; // result stands, ratings do not move
+  G.finish(g, body.result, 'adjudicated by the site owner'); audit(user, 'owner:result', g.id, body.result + (body.unrated ? ' (ratings unchanged)' : '')); return { ok: true };
+});
+route('POST', '/api/owner/games/:id/abort', { auth: 'user' }, ({ user, params }) => { needOwner(user); const g = liveGame(params.id); G.finish(g, '*', 'aborted'); audit(user, 'owner:abort', g.id); return { ok: true }; });
+route('POST', '/api/owner/games/abort-all', { auth: 'user' }, ({ user }) => { needOwner(user); let n = 0; for (const g of [...G.live.values()]) if (g.status === 'active') { G.finish(g, '*', 'aborted'); n++; } audit(user, 'owner:abort-all', n + ' games'); return { ok: true, aborted: n }; });
+route('POST', '/api/owner/users/:name/rating', { auth: 'user' }, ({ user, params, body }) => {
+  needOwner(user); const t = userByName(params.name); const cat = String(body.category); if (!core.ALL_CATS.includes(cat)) throw bad('Unknown category');
+  const r = Math.round(Number(body.rating)); if (!Number.isFinite(r) || r < 100 || r > 3500) throw bad('Rating must be between 100 and 3500');
+  core.ensureRatings(t.id); q.run('UPDATE ratings SET rating=?, updated_at=? WHERE user_id=? AND category=?', r, nowMs(), t.id, cat); audit(user, 'owner:rating', t.username, cat + ' = ' + r); return { ok: true };
+});
+route('POST', '/api/owner/users/:name/achievements', { auth: 'user' }, ({ user, params, body }) => {
+  needOwner(user); const t = userByName(params.name); let n = 0;
+  if (body.all) { for (const a of q.all('SELECT id FROM achievements')) if (core.award(t.id, a.id)) n++; } else { if (!q.get('SELECT 1 FROM achievements WHERE id=?', String(body.id))) throw bad('Unknown achievement'); if (core.award(t.id, String(body.id))) n++; }
+  audit(user, 'owner:achievements', t.username, body.all ? 'all' : body.id); return { ok: true, granted: n };
+});
+route('POST', '/api/owner/users/:name/kick', { auth: 'user' }, ({ user, params }) => {
+  needOwner(user); const t = userByName(params.name); if (t.id === user.id) throw bad('Not yourself'); q.run('DELETE FROM sessions WHERE user_id=?', t.id);
+  let n = 0; for (const ws of hub.all) if (ws.user && ws.user.id === t.id) { try { ws.close(4000, 'signed out by the owner'); } catch {} n++; } audit(user, 'owner:kick', t.username); return { ok: true, connections: n };
+});
+route('POST', '/api/owner/broadcast', { auth: 'user' }, ({ user, body }) => { needOwner(user); const text = vText(body.text, { min: 1, max: 200, field: 'Message' }); hub.broadcast({ t: 'notice', text: 'Announcement: ' + text }); audit(user, 'owner:broadcast', '', text); return { ok: true }; });
+route('POST', '/api/owner/backup-now', { auth: 'user' }, async ({ user }) => { needOwner(user); if (!backup.enabled) throw bad('Backups are not configured'); const done = await backup.snapshot(db, DB_PATH, true); return { ok: done, lastBackupAt: backup.status.lastBackupAt, error: backup.status.lastError }; });
 route('GET', '/api/admin/stats', { auth: 'user' }, ({ user }) => {
   needMod(user); const day = nowMs() - 864e5;
   const c = (sql, ...a) => q.get(sql, ...a).n;
