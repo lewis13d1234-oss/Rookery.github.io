@@ -3,7 +3,7 @@ const port=3900+Math.floor(Math.random()*90);const db=path.join(os.tmpdir(),'rk-
 const p=spawn('node',['--disable-warning=ExperimentalWarning','server/index.js'],{env:{...process.env,PORT:port,ROOKERY_DB:db,ROOKERY_ADMIN_USERNAME:'Rookery'}});
 let ok=0,bad=0;const t=(n,c)=>{c?ok++:(bad++,console.log('FAIL',n))};
 const post=(u,b)=>fetch(`http://127.0.0.1:${port}${u}`,{method:'POST',headers:{'content-type':'application/json','x-rookery':'1'},body:JSON.stringify(b)}).then(r=>r.json());
-(async()=>{await new Promise(r=>setTimeout(r,1500));
+(async()=>{await new Promise(r=>setTimeout(r,4000));
  const h=await fetch(`http://127.0.0.1:${port}/api/healthz`).then(r=>r.json());t('health',h.ok===true);
  const a=await post('/api/auth/register',{username:'alice1',email:'a@x.io',password:'Passw0rd!long'});
  t('first user not admin',a.firstUserIsAdmin===false&&a.user&&a.user.role!=='admin');
