@@ -106,3 +106,4 @@ async function boot() {
   route();
 }
 boot();
+import('./update-check.js').then(({ startUpdateCheck }) => get('/api/config').then((c) => startUpdateCheck({ current: c.build, fetchLatest: async () => (await get('/api/config')).build }))).catch(() => {});

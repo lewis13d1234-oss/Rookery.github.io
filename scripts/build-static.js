@@ -1,10 +1,11 @@
 // Builds a single self-contained index.html (GitHub Pages friendly): no server, no network, no build tools.
 // Usage: node scripts/build-static.js [outfile]
+import crypto from 'node:crypto';
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); const P = (...a) => path.join(ROOT, ...a);
 const FILES = {
   'shared/chess.js': 'shared/chess.js', 'shared/engine.js': 'shared/engine.js', 'shared/openings.js': 'shared/openings.js', 'shared/pgn.js': 'shared/pgn.js', 'data/lessons.js': 'data/lessons.js',
-  'js/util.js': 'public/js/util.js', 'js/board.js': 'public/js/board.js', 'js/pieces.js': 'public/js/pieces.js', 'js/sound.js': 'public/js/sound.js', 'js/learn-common.js': 'public/js/learn-common.js', 'js/game-ui.js': 'public/js/game-ui.js',
+  'js/util.js': 'public/js/util.js', 'js/update-check.js': 'public/js/update-check.js', 'js/board.js': 'public/js/board.js', 'js/pieces.js': 'public/js/pieces.js', 'js/sound.js': 'public/js/sound.js', 'js/learn-common.js': 'public/js/learn-common.js', 'js/game-ui.js': 'public/js/game-ui.js',
   'js/engine-client.js': 'public/js/engine-client.js', 'js/api.js': 'public/js/api.js', 'js/engine-worker.js': 'public/js/engine-worker.js',
   'js/pages/computer.js': 'public/js/pages/computer.js', 'js/pages/puzzles.js': 'public/js/pages/puzzles.js', 'js/pages/learn.js': 'public/js/pages/learn.js', 'js/pages/openings.js': 'public/js/pages/openings.js', 'js/pages/analysis.js': 'public/js/pages/analysis.js',
   'static/home-static.js': 'public/static/home-static.js', 'static/settings-static.js': 'public/static/settings-static.js', 'static/local-game.js': 'public/static/local-game.js', 'static/mygames.js': 'public/static/mygames.js', 'static/profile-page.js': 'public/static/profile-page.js', 'static/profiles.js': 'public/static/profiles.js', 'static/icons.js': 'public/static/icons.js', 'static/i18n.js': 'public/static/i18n.js', 'static/admin-local.js': 'public/static/admin-local.js', 'static/i18n-lessons.js': 'public/static/i18n-lessons.js', 'static/resume.js': 'public/static/resume.js', 'static/board-page.js': 'public/static/board-page.js', 'static/online-page.js': 'public/static/online-page.js', 'js/local-api.js': 'public/static/local-api.js', 'js/app-static.js': 'public/static/app-static.js',
@@ -75,6 +76,7 @@ const main = RUNTIME + virtual + bundle(mainIds) + `window.__rk_import = (id) =>
 const asciiJs = (t) => t.replace(/[^\x00-\x7f]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const asciiCss = (t) => t.replace(/[\u0080-\u{10ffff}]/gu, (c) => '\\' + c.codePointAt(0).toString(16) + ' ');
 const asciiHtml = (t) => t.replace(/[\u0080-\u{10ffff}]/gu, (c) => '&#' + c.codePointAt(0) + ';');
+const build = crypto.createHash('sha1').update(main).update(css).update(workerSrc).digest('hex').slice(0, 12);
 const html = `<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
@@ -83,6 +85,7 @@ const html = `<!doctype html>
 <title>Rookery &#8212; free chess for everyone</title>
 <meta name="description" content="Rookery: free chess in your browser. Play the computer, solve puzzles, take lessons, explore openings and analyse games. No ads, no sign-up.">
 <meta name="theme-color" content="#14161c">
+<meta name="rk-build" content="${build}">
 <link rel="icon" href="${logo}">
 <style>
 ${asciiCss(css)}
@@ -93,7 +96,7 @@ ${asciiCss(css)}
 <a class="skip" href="#view">Skip to content</a>
 <div id="app"></div>
 <noscript><p style="padding:2rem">Rookery needs JavaScript to run the chessboard.</p></noscript>
-<script>window.__rk_logo=${JSON.stringify(logo)};window.__rk_worker_src=${asciiJs(esc(JSON.stringify(workerSrc)))};</script>
+<script>window.__rk_build="${build}";window.__rk_logo=${JSON.stringify(logo)};window.__rk_worker_src=${asciiJs(esc(JSON.stringify(workerSrc)))};</script>
 <script>
 (function () {
 ${asciiJs(esc(main))}

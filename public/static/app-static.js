@@ -2,6 +2,7 @@ import { h, $, clear, spinner, errorBox } from './util.js';
 import { state, loadPrefs, applyPrefs, setPrefs, on } from './api.js';
 import { initProfiles, activeProfile, asUser } from './profiles.js';
 import { startIcons } from './icons.js';
+import { startUpdateCheck, fetchPageBuild } from './update-check.js';
 import { startI18n, getLang, setLang, languages } from './i18n.js';
 import { installResume } from './resume.js';
 import { avatar } from './util.js';
@@ -44,6 +45,6 @@ function boot() {
   app.append(header, drawer, h('div', { class: 'scrim', onclick: () => document.body.classList.remove('menu-open') }), view,
     h('footer', { class: 'footer' }, h('div', null, h('strong', null, 'Rookery'), ' — chess for everyone. ', h('span', { class: 'free-badge' }, '100% free · no ads · no premium')), h('div', { class: 'muted' }, 'Standalone edition: runs entirely in your browser.')),
     h('nav', { class: 'tabbar', 'aria-label': 'Primary' }, tab.map(([p, i, l]) => h('a', { href: '#' + p, dataset: { nav: p } }, h('span', { class: 'ti' }, i), h('span', null, l)))));
-  window.addEventListener('hashchange', route); route(); startIcons(app); startI18n(app);
+  window.addEventListener('hashchange', route); route(); startIcons(app); startI18n(app); startUpdateCheck({ current: window.__rk_build, fetchLatest: fetchPageBuild });
 }
 boot();

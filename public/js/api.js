@@ -22,7 +22,7 @@ export const BOARDS = {
   violet: ['#e6def2', '#8466b3', 'Violet'], mono: ['#e5e5e5', '#8a8a8a', 'Monochrome'], neon: ['#2a3a3a', '#16211f', 'Neon'], coral: ['#ffe5d0', '#e0805a', 'Coral'],
   forest: ['#dfe8d0', '#4f7a4a', 'Forest'], ocean: ['#d6ecf2', '#2f7f9c', 'Ocean'], ruby: ['#f3dcdc', '#a02c3c', 'Ruby'], graphite: ['#c9ccd1', '#4b4f58', 'Graphite'],
   gold: ['#f6e7b4', '#b8902c', 'Gold'], sunset: ['#ffe1b8', '#d5603a', 'Sunset'], mint: ['#e2f6ee', '#4fb08a', 'Mint'], candy: ['#fde3f1', '#c46aa2', 'Candy'],
-  lava: ['#3a2a28', '#7a2f1c', 'Lava'], paper: ['#fbfaf5', '#b9b6a8', 'Paper'], night: ['#556078', '#1e2536', 'Night'], lavender: ['#efe9fb', '#9c8bd0', 'Lavender'],
+  lava: ['#3a2a28', '#7a2f1c', 'Lava'], paper: ['#fbfaf5', '#b9b6a8', 'Paper'], night: ['#556078', '#1e2536', 'Night'], lavender: ['#efe9fb', '#9c8bd0', 'Lavender'], cat: ['#f7e8d0', '#c8955f', 'Cat (paw prints)'],
 };
 export const BACKGROUNDS = { none: 'Plain', dusk: 'Dusk gradient', felt: 'Green felt', paper: 'Paper', grid: 'Blueprint grid', aurora: 'Aurora' };
 export const PROFILE_THEMES = { ember: ['#e0a33e', 'Ember'], teal: ['#2ba7a0', 'Teal'], crimson: ['#d4495a', 'Crimson'], indigo: ['#6b78e5', 'Indigo'], forest: ['#5aa05a', 'Forest'], orchid: ['#b86fd1', 'Orchid'] };
@@ -30,7 +30,7 @@ export const PROFILE_THEMES = { ember: ['#e0a33e', 'Ember'], teal: ['#2ba7a0', '
 export function loadPrefs() { let p = {}; try { p = JSON.parse(localStorage.getItem('rk_prefs') || '{}'); } catch {} return { ...DEFAULT_PREFS, ...p }; }
 export function applyPrefs(p = state.prefs) {
   const r = document.documentElement; const t = p.theme === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : p.theme;
-  r.dataset.theme = t; const b = BOARDS[p.board] || BOARDS.ember; r.style.setProperty('--sq-light', b[0]); r.style.setProperty('--sq-dark', b[1]);
+  r.dataset.theme = t; r.dataset.board = p.board || ''; const b = BOARDS[p.board] || BOARDS.ember; r.style.setProperty('--sq-light', b[0]); r.style.setProperty('--sq-dark', b[1]);
   r.dataset.bg = p.bg; r.dataset.noanim = p.animations ? '0' : '1'; r.style.setProperty('--accent', (PROFILE_THEMES[p.profileTheme] || PROFILE_THEMES.ember)[0]);
   configureSound({ enabled: p.sound, volume: p.volume, pack: p.soundPack });
 }

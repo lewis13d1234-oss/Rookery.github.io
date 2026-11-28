@@ -38,7 +38,9 @@ function fullUser(u) {
 }
 
 // ---------------------------------------------------------------- config
-route('GET', '/api/config', { auth: false }, () => ({ name: 'Rookery', free: true, mail: process.env.ROOKERY_MAIL_WEBHOOK ? 'webhook' : 'outbox', cats: core.ALL_CATS }));
+// Build id = hash of everything the browser loads, so it changes only when the site really changes (not on every restart).
+const BUILD = (() => { const h = crypto.createHash('sha1'); const walk = (d) => { for (const n of fs.readdirSync(d).sort()) { const f = path.join(d, n); const st = fs.statSync(f); if (st.isDirectory()) walk(f); else { h.update(f.slice(ROOT.length)); h.update(fs.readFileSync(f)); } } }; try { walk(path.join(ROOT, 'public')); walk(path.join(ROOT, 'shared')); } catch {} return h.digest('hex').slice(0, 12); })();
+route('GET', '/api/config', { auth: false }, () => ({ name: 'Rookery', free: true, build: BUILD, mail: process.env.ROOKERY_MAIL_WEBHOOK ? 'webhook' : 'outbox', cats: core.ALL_CATS }));
 
 // ---------------------------------------------------------------- auth
 route('GET', '/api/healthz', { auth: false }, () => ({ ok: true }));
