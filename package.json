@@ -1,0 +1,21 @@
+{
+  "name": "rookery",
+  "version": "1.0.0",
+  "description": "Rookery — a completely free chess platform. No ads, no premium tier, no locked features.",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "build:static": "node scripts/build-static.js dist/index.html",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning test/run-all.js",
+    "migrate": "node --disable-warning=ExperimentalWarning scripts/migrate.js",
+    "make-admin": "node --disable-warning=ExperimentalWarning scripts/make-admin.js",
+    "gen-puzzles": "node scripts/generate-puzzles.js",
+    "validate-content": "node scripts/validate-content.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

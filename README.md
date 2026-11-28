@@ -52,6 +52,10 @@ I would rather you read these here than discover them.
 - **No email server.** Reset links go to `data/outbox/` or your webhook. Recovery codes (shown once at sign-up) work without email.
 - **Not load-tested.** Tested with a handful of simultaneous browser sessions, not thousands.
 
+## Standalone single-file edition (GitHub Pages)
+
+`npm run build:static` writes `dist/index.html`: one pure-ASCII file with the whole front end, the engine and all lessons and puzzles inlined. It needs no server, so it can be hosted on GitHub Pages or opened straight from disk. It includes the computer opponent, two-player mode, friend-to-friend online play (a direct WebRTC connection set up by swapping two codes; `node test/online.test.cjs` runs two real browsers against each other), puzzles (with a local rating), lessons, openings, an analysis board, game analysis, saved games, achievements and local profiles (with photo upload), keyboard-only play with screen-reader announcements (arrow keys + Enter), premoves, 24 board colours and 11 piece skins, and a hidden passcode-gated admin page at `#/admin` for managing the browser's local data (a convenience, not real security: there is no server), and six interface languages (English, Spanish, French, German, Portuguese, Italian; lessons are translated but opening names stay English). Matchmaking, accounts, ratings, clubs, tournaments and admin need the server and are not in it. Progress lives in the browser's localStorage (use Profile, then Download backup, to move it). `node test/static.test.cjs dist/index.html` tests the built file in a real browser.
+
 ## Deploying and a domain
 
 Nothing is deployed and no domain exists. Run it on any machine with Node 22.5+, put it behind a reverse proxy that terminates HTTPS and forwards WebSockets (`/ws`), and set `ROOKERY_TRUST_PROXY=1`. Back up the SQLite file.
@@ -59,3 +63,6 @@ Nothing is deployed and no domain exists. Run it on any machine with Node 22.5+,
 ## Layout
 
 `shared/` rules, engine, Glicko-2, PGN, openings (used by server and browser) · `server/` HTTP, WebSocket, game manager, tournaments, API · `public/` single-page app · `data/` lessons and puzzles · `scripts/` · `test/`
+
+## Deploying the server (Render)
+See [DEPLOY.md](DEPLOY.md). `render.yaml` is a ready blueprint; set `ROOKERY_ADMIN_USERNAME` so only your username can become admin.

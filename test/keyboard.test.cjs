@@ -1,0 +1,23 @@
+const { chromium, watchErrors } = require('./ui-helpers.cjs');
+const file = process.argv[2]; let pass = 0, fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fail++; };
+(async () => {
+  const b = await chromium.launch(); const p = await b.newPage(); const errs = []; watchErrors(p, errs, 'kb');
+  await p.goto('file://' + file + '#/local'); await p.waitForSelector('button:has-text("Start")'); await p.click('button:has-text("Start")'); await p.waitForSelector('.board');
+  await p.focus('.board'); await p.waitForTimeout(200);
+  const say = () => p.evaluate(() => document.querySelector('.board .sr-only').textContent);
+  ok(/e2, white pawn/.test(await say()), 'focus announces the cursor square: ' + await say());
+  ok(await p.evaluate(() => !!document.querySelector('.hl.cur')), 'cursor ring is drawn');
+  await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+  ok(/Selected e2, white pawn, selected\. 2 legal moves: .*e3.*e4/.test(await say()) || /2 legal moves/.test(await say()), 'Enter selects and lists legal moves: ' + await say());
+  await p.keyboard.press('ArrowUp'); await p.keyboard.press('ArrowUp'); await p.waitForTimeout(150);
+  ok(/e4, empty, legal move/.test(await say()), 'arrows move the cursor and flag legal targets: ' + await say());
+  await p.keyboard.press('Enter'); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => /e4/.test(document.querySelector('.moves')?.textContent || '')), 'pawn moved to e4 by keyboard only');
+  ok(/White plays e4/.test(await p.evaluate(() => [...document.querySelectorAll('.sr-only')].map((x) => x.textContent).join('|'))), 'move announced to screen readers');
+  await p.focus('.board'); await p.keyboard.press('ArrowLeft'); await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+  ok(/cannot be moved|Selected/.test(await say()), 'selecting a square gives feedback: ' + await say());
+  await p.keyboard.press('Escape'); await p.waitForTimeout(100);
+  ok(/Selection cleared/.test(await say()), 'Escape clears selection');
+  ok(errs.length === 0, 'no console errors ' + errs.join(';'));
+  console.log(`\n${pass} passed, ${fail} failed`); await b.close(); process.exit(fail ? 1 : 0);
+})();

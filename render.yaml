@@ -1,0 +1,23 @@
+# Render blueprint for Rookery. In Render: New > Blueprint > pick this repository.
+services:
+  - type: web
+    name: rookery
+    runtime: node
+    plan: free            # free plan: the SQLite file is wiped on every deploy and restart. See DEPLOY.md.
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ROOKERY_TRUST_PROXY
+        value: "1"
+      - key: ROOKERY_ADMIN_USERNAME
+        sync: false       # Render asks you for this when you create the service: the username that becomes admin
+    # To keep data between deploys, switch to a paid plan, uncomment the disk, and set ROOKERY_DB:
+    # plan: starter
+    # disk:
+    #   name: rookery-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # (add env var ROOKERY_DB=/var/data/rookery.db)

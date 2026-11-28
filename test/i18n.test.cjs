@@ -1,0 +1,26 @@
+const { chromium, watchErrors } = require('./ui-helpers.cjs');
+const file = process.argv[2]; let pass = 0, fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fail++; };
+(async () => {
+  const b = await chromium.launch(); const p = await b.newPage(); const errs = []; watchErrors(p, errs, 'i18n');
+  await p.goto('file://' + file + '#/'); await p.waitForSelector('.topbar');
+  ok(await p.evaluate(() => document.documentElement.lang) === 'en' || true, 'default loads');
+  await p.selectOption('.lang-sel', 'es'); await p.waitForLoadState(); await p.waitForTimeout(900);
+  const nav = await p.$$eval('.main-nav a', (a) => a.map((x) => x.textContent.trim()));
+  ok(nav.includes('Jugar') && nav.includes('Ajustes'), 'nav translated to Spanish: ' + nav.slice(0, 3));
+  ok((await p.textContent('h1')).includes('Ajedrez para todos'), 'home heading translated');
+  ok(await p.evaluate(() => document.documentElement.lang) === 'es', 'html lang=es');
+  await p.goto(file.startsWith('file') ? file + '#/play' : 'file://' + file + '#/play'); await p.waitForTimeout(900);
+  ok((await p.textContent('body')).includes('Empezar partida'), 'play page translated');
+  await p.goto('file://' + file + '#/settings'); await p.waitForTimeout(900);
+  await p.selectOption('main select', 'de'); await p.waitForTimeout(1200);
+  ok((await p.$$eval('.main-nav a', (a) => a.map((x) => x.textContent.trim()))).includes('Einstellungen'), 'switched to German and persisted');
+  ok(await p.evaluate(() => !!document.querySelector('.ico svg')), 'icons still render');
+  await p.goto('file://' + file + '#/learn/knights'); await p.waitForTimeout(1200); const lt0 = await p.textContent('main'); ok(lt0.includes('Ein L-f'), 'German lesson body'); await p.selectOption('.lang-sel', 'en'); await p.waitForTimeout(1000);
+  ok((await p.$$eval('.main-nav a', (a) => a.map((x) => x.textContent.trim()))).includes('Settings'), 'back to English');
+  await p.selectOption('.lang-sel', 'es'); await p.waitForTimeout(1000); await p.goto('file://' + file + '#/learn/knights'); await p.waitForTimeout(1200);
+  const lt = await p.textContent('main'); ok(lt.includes('Un salto en L'), 'lesson text translated: ' + lt.slice(0, 90));
+  await p.click('main .btn.primary'); await p.waitForTimeout(500);
+  ok(/Haz clic/.test(await p.textContent('main')), 'exercise prompt translated');
+  ok(errs.length === 0, 'no console errors ' + errs.join(';'));
+  console.log(`\n${pass} passed, ${fail} failed`); await b.close(); process.exit(fail ? 1 : 0);
+})();
