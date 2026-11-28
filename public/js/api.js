@@ -1,5 +1,6 @@
 // REST client, session/preferences store and the shared WebSocket connection.
 import { toast } from './util.js';
+import { showBanner } from './update-check.js';
 import { configureSound, play } from './sound.js';
 
 export const state = { user: null, prefs: {}, ws: null, wsReady: false, listeners: new Map(), config: null, offset: 0 };
@@ -75,6 +76,7 @@ export const serverNow = () => Date.now() + state.offset;
 export function initGlobalHandlers(navigate) {
   on('ws:achievement', (m) => { toast(`🏅 Achievement unlocked: ${m.achievement.name}`, 'success', 6000); play('right'); });
   on('ws:notice', (m) => toast(m.text, 'info', 6000));
+  on('ws:announce', (m) => showBanner('announce-banner', 'Announcement: ' + m.text, [['OK', (b) => b.remove()]]));
   on('ws:friend_request', (m) => { toast(`${m.from} sent you a friend request`, 'info', 6000); play('notify'); });
   on('ws:dm', (m) => { if (!location.hash.startsWith('#/messages')) { toast(`✉ ${m.from}: ${m.body.slice(0, 60)}`, 'info', 5000); play('notify'); } });
   on('ws:challenge', (m) => {

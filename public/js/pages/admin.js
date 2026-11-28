@@ -92,32 +92,6 @@ export default async function admin(root, ctx) {
         h('tbody', null, lessons.map((l) => h('tr', null, h('td', null, h('a', { href: '#/learn/' + l.id }, l.title)), h('td', null, l.level), h('td', null, l.steps.length), h('td', null, l.published ? 'yes' : 'no'),
           h('td', null, h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: async () => { const v = await promptBox('Edit title', 'Lesson title', { value: l.title }); if (v == null) return; try { await put('/api/admin/lessons/' + l.id, { title: v }); show('lessons'); } catch (e) { toast(e.message, 'error'); } } }, 'Rename'), h('button', { class: 'btn small', onclick: async () => { try { await put('/api/admin/lessons/' + l.id, { published: !l.published }); show('lessons'); } catch (e) { toast(e.message, 'error'); } } }, l.published ? 'Unpublish' : 'Publish'))))))));
     },
-    async owner() {
-      if (!state.user.owner) return h('p', { class: 'muted' }, 'Owner only.');
-      const info = await get('/api/owner/info'); const out = h('div', { class: 'col' });
-      const run = (fn, ok) => async () => { try { const r = await fn(); toast(typeof ok === 'function' ? ok(r) : ok || 'Done', 'success'); show('owner'); } catch (e) { if (e.message !== 'Cancelled') toast(e.message, 'error'); } };
-      const field = (label, el) => h('label', { class: 'field' }, h('span', null, label), el);
-      const who = h('input', { class: 'input', placeholder: 'username', 'aria-label': 'Username' });
-      const cat = h('select', { 'aria-label': 'Rating category' }, info.categories.map((c) => h('option', { value: c }, cap(c)))); const rating = h('input', { class: 'input', type: 'number', min: 100, max: 3500, value: 1500, 'aria-label': 'Rating' });
-      const ach = h('select', { 'aria-label': 'Achievement' }, info.achievements.map((a) => h('option', { value: a.id }, a.name)));
-      const msg = h('input', { class: 'input', maxlength: 200, placeholder: 'Message to everyone online', 'aria-label': 'Announcement' }); const unrated = h('input', { type: 'checkbox', id: 'own-unr' });
-      const gameRows = info.games.length ? info.games.map((g) => h('tr', null, h('td', null, h('a', { href: '#/game/' + g.id }, g.id)), h('td', null, g.white + ' v ' + g.black), h('td', { class: 'small' }, `${g.tc} ${g.rated ? 'rated' : 'casual'}, ${g.plies} plies${g.private ? ', private' : ''}`),
-        h('td', null, h('div', { class: 'row' }, [['White wins', '1-0'], ['Black wins', '0-1'], ['Draw', '1/2-1/2']].map(([l, r]) => h('button', { class: 'btn small', onclick: run(async () => { if (!await confirmBox('Force result: ' + l, `Game ${g.id} (${g.white} v ${g.black}) ends now. Players will see "adjudicated by the site owner".` + (unrated.checked ? ' Ratings will not change.' : ' Ratings will change as for a normal result.'), 'End game')) throw new Error('Cancelled'); return post(`/api/owner/games/${g.id}/result`, { result: r, unrated: unrated.checked }); }, 'Game ended') }, l)),
-          h('button', { class: 'btn small danger', onclick: run(async () => { if (!await confirmBox('Abort game', 'No result, no rating change.', 'Abort')) throw new Error('Cancelled'); return post(`/api/owner/games/${g.id}/abort`); }, 'Game aborted') }, 'Abort'))))) : [h('tr', null, h('td', { colspan: 4, class: 'muted' }, 'No games in progress.'))];
-      out.append(
-        h('section', { class: 'card col' }, h('h2', null, 'Games in progress'), h('div', { class: 'table-wrap' }, h('table', { class: 'table' }, h('thead', null, h('tr', null, ['Game', 'Players', 'Info', 'Force'].map((x) => h('th', null, x)))), h('tbody', null, gameRows))),
-          h('label', { class: 'row' }, unrated, h('span', null, 'Forced results do not change ratings')),
-          h('div', { class: 'row' }, h('button', { class: 'btn danger', onclick: run(async () => { if (!await confirmBox('End ALL games?', 'Every game in progress is aborted with no result. Use before maintenance.', 'Abort all')) throw new Error('Cancelled'); return post('/api/owner/games/abort-all'); }, (r) => `${r.aborted} games aborted`) }, 'Abort all games'), h('button', { class: 'btn ghost', onclick: () => show('owner') }, 'Refresh'))),
-        h('section', { class: 'card col' }, h('h2', null, 'Player tools'), field('Username', who),
-          h('div', { class: 'row' }, field('Category', cat), field('Rating', rating), h('button', { class: 'btn', onclick: run(() => post(`/api/owner/users/${encodeURIComponent(who.value.trim())}/rating`, { category: cat.value, rating: Number(rating.value) }), 'Rating set') }, 'Set rating')),
-          h('div', { class: 'row' }, field('Achievement', ach), h('button', { class: 'btn', onclick: run(() => post(`/api/owner/users/${encodeURIComponent(who.value.trim())}/achievements`, { id: ach.value }), (r) => r.granted ? 'Achievement granted' : 'They already have it') }, 'Grant'), h('button', { class: 'btn', onclick: run(() => post(`/api/owner/users/${encodeURIComponent(who.value.trim())}/achievements`, { all: true }), (r) => `${r.granted} achievements granted`) }, 'Grant all')),
-          h('div', { class: 'row' }, h('button', { class: 'btn danger', onclick: run(async () => { if (!await confirmBox('Sign out ' + who.value.trim() + '?', 'Ends their sessions and disconnects them. They can sign in again.', 'Sign out')) throw new Error('Cancelled'); return post(`/api/owner/users/${encodeURIComponent(who.value.trim())}/kick`); }, 'Signed out') }, 'Sign out everywhere'))),
-        h('section', { class: 'card col' }, h('h2', null, 'Site'), field('Announcement', msg),
-          h('div', { class: 'row' }, h('button', { class: 'btn', onclick: run(async () => { const r = await post('/api/owner/broadcast', { text: msg.value }); msg.value = ''; return r; }, 'Announcement sent') }, 'Send to everyone online'),
-            h('button', { class: 'btn', onclick: run(() => post('/api/owner/backup-now'), (r) => r.ok ? 'Backup saved' : 'Backup failed: ' + (r.error || 'see logs')) }, 'Back up now')),
-          h('p', { class: 'muted small' }, 'Every owner action is written to the audit log. Forced results are shown to players as adjudicated by the site owner.')));
-      return out;
-    },
     async audit() {
       if (!isAdmin) return h('p', { class: 'muted' }, 'Administrators only.');
       const { log } = await get('/api/admin/audit');
@@ -125,7 +99,7 @@ export default async function admin(root, ctx) {
         h('tbody', null, log.map((a) => h('tr', null, h('td', { class: 'small' }, fmtDate(a.ts || a.created_at)), h('td', null, a.actor), h('td', null, a.action), h('td', null, a.target), h('td', { class: 'small' }, a.note || a.detail || ''))))));
     },
   };
-  const items = [['overview', 'Overview'], ['users', 'Users'], ['reports', 'Reports'], ['flags', 'Fair play'], ['tournaments', 'Tournaments'], ...(isAdmin ? [['puzzles', 'Puzzles'], ['lessons', 'Lessons'], ['audit', 'Audit log']] : []), ...(state.user.owner ? [['owner', 'Owner tools']] : [])];
+  const items = [['overview', 'Overview'], ['users', 'Users'], ['reports', 'Reports'], ['flags', 'Fair play'], ['tournaments', 'Tournaments'], ...(isAdmin ? [['puzzles', 'Puzzles'], ['lessons', 'Lessons'], ['audit', 'Audit log']] : [])];
   let token = 0;
   async function show(id) { const my = ++token; clear(panel); panel.append(spinner()); try { const el = await views[id](); if (my !== token) return; clear(panel); panel.append(el); } catch (e) { if (my !== token) return; clear(panel); panel.append(errorBox(e.message)); } }
   root.append(h('h1', null, '🛡 Admin dashboard'), h('p', { class: 'muted' }, 'Signed in as ' + (state.user.owner ? 'owner' : role) + '.'), tabs(items, 'overview', show), panel);

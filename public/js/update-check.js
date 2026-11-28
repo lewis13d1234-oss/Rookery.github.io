@@ -1,14 +1,15 @@
 // Tells people who have the site open on an old version to refresh the page.
 const EVERY = 5 * 60_000, MIN_GAP = 60_000;
 
-function banner() {
-  if (document.getElementById('update-banner')) return;
-  const b = document.createElement('div'); b.id = 'update-banner'; b.className = 'update-banner'; b.setAttribute('role', 'status');
-  const t = document.createElement('span'); t.textContent = 'A new version of Rookery is available. Refresh the page to update.';
-  const go = document.createElement('button'); go.className = 'btn small'; go.textContent = 'Refresh'; go.onclick = () => location.reload();
-  const x = document.createElement('button'); x.className = 'btn small ghost'; x.textContent = 'Later'; x.setAttribute('aria-label', 'Dismiss'); x.onclick = () => b.remove();
-  b.append(t, go, x); (document.getElementById('app') || document.body).prepend(b);
+// A bar across the top of the page: used for "new version" and for announcements from the owner.
+export function showBanner(id, text, buttons) {
+  document.getElementById(id)?.remove();
+  const b = document.createElement('div'); b.id = id; b.className = 'update-banner'; b.setAttribute('role', 'status');
+  const t = document.createElement('span'); t.textContent = text; b.append(t);
+  for (const [label, fn, ghost] of buttons) { const x = document.createElement('button'); x.className = 'btn small' + (ghost ? ' ghost' : ''); x.textContent = label; x.onclick = () => fn(b); b.append(x); }
+  (document.getElementById('app') || document.body).prepend(b); return b;
 }
+const banner = () => showBanner('update-banner', 'A new version of Rookery is available. Refresh the page to update.', [['Refresh', () => location.reload()], ['Later', (b) => b.remove(), true]]);
 
 export function startUpdateCheck({ current, fetchLatest }) {
   if (!current || typeof fetchLatest !== 'function') return;

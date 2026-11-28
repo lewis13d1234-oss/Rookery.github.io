@@ -532,7 +532,7 @@ route('POST', '/api/owner/users/:name/kick', { auth: 'user' }, ({ user, params }
   needOwner(user); const t = userByName(params.name); if (t.id === user.id) throw bad('Not yourself'); q.run('DELETE FROM sessions WHERE user_id=?', t.id);
   let n = 0; for (const ws of hub.all) if (ws.user && ws.user.id === t.id) { try { ws.close(4000, 'signed out by the owner'); } catch {} n++; } audit(user, 'owner:kick', t.username); return { ok: true, connections: n };
 });
-route('POST', '/api/owner/broadcast', { auth: 'user' }, ({ user, body }) => { needOwner(user); const text = vText(body.text, { min: 1, max: 200, field: 'Message' }); hub.broadcast({ t: 'notice', text: 'Announcement: ' + text }); audit(user, 'owner:broadcast', '', text); return { ok: true }; });
+route('POST', '/api/owner/broadcast', { auth: 'user' }, ({ user, body }) => { needOwner(user); const text = vText(body.text, { min: 1, max: 200, field: 'Message' }); hub.broadcast({ t: 'announce', text }); audit(user, 'owner:broadcast', '', text); return { ok: true }; });
 route('POST', '/api/owner/backup-now', { auth: 'user' }, async ({ user }) => { needOwner(user); if (!backup.enabled) throw bad('Backups are not configured'); const done = await backup.snapshot(db, DB_PATH, true); return { ok: done, lastBackupAt: backup.status.lastBackupAt, error: backup.status.lastError }; });
 route('GET', '/api/admin/stats', { auth: 'user' }, ({ user }) => {
   needMod(user); const day = nowMs() - 864e5;

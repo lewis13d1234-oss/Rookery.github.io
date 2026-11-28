@@ -179,3 +179,13 @@ h1, h2, h3, .lead { overflow-wrap: break-word; hyphens: auto; } .hero-actions { 
 /* Cat board: paw print on the dark squares, whisker lines on the light ones (pure CSS, no image files) */
 :root[data-board="cat"] .sq.dark { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='%23f7e8d0' fill-opacity='.38'%3E%3Cellipse cx='50' cy='64' rx='17' ry='14'/%3E%3Cellipse cx='27' cy='44' rx='7' ry='9' transform='rotate(-20 27 44)'/%3E%3Cellipse cx='42' cy='30' rx='7' ry='10' transform='rotate(-6 42 30)'/%3E%3Cellipse cx='58' cy='30' rx='7' ry='10' transform='rotate(6 58 30)'/%3E%3Cellipse cx='73' cy='44' rx='7' ry='9' transform='rotate(20 73 44)'/%3E%3C/g%3E%3C/svg%3E"); background-size: 62% 62%; background-position: center; background-repeat: no-repeat; }
 :root[data-board="cat"] .sq.light { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg stroke='%23c8955f' stroke-opacity='.35' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 78 L34 74 M12 88 L34 84 M88 78 L66 74 M88 88 L66 84'/%3E%3C/g%3E%3C/svg%3E"); background-size: 100% 100%; }
+
+/* Owner panel: bottom-left, collapses to a bar */
+.owner-panel { position: fixed; left: 12px; bottom: 12px; z-index: 70; width: min(340px, calc(100vw - 24px)); background: var(--bg-elev, #1f232e); border: 1px solid var(--accent, #e0a33e); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.45); overflow: hidden; }
+.owner-panel .op-head { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: .55rem .8rem; background: transparent; border: 0; color: var(--accent, #e0a33e); font: inherit; font-weight: 700; cursor: pointer; }
+.owner-panel .op-body { max-height: min(60vh, 520px); overflow: auto; padding: 0 .8rem .8rem; display: flex; flex-direction: column; gap: .8rem; }
+.owner-panel.min { width: auto; } .owner-panel.min .op-head { gap: .8rem; } .owner-panel.min .op-body { display: none; }
+.owner-panel .op-sec { display: flex; flex-direction: column; gap: .45rem; border-top: 1px solid var(--line, #2c3140); padding-top: .6rem; }
+.owner-panel .op-game { display: flex; flex-direction: column; gap: .3rem; }
+.owner-panel .input, .owner-panel select { min-width: 0; max-width: 100%; }
+@media (max-width: 600px) { .owner-panel { bottom: 64px; } }

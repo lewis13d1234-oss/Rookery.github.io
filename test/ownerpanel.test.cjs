@@ -1,0 +1,24 @@
+// Floating owner panel + announcement banner. node test/ownerpanel.test.cjs (starts its own server)
+const { spawn } = require('child_process'); const os = require('os'), path = require('path');
+const { chromium } = require('/home/claude/rookery/test/ui-helpers.cjs');
+const port = 4300 + Math.floor(Math.random() * 90), base = `http://127.0.0.1:${port}`, db = path.join(os.tmpdir(), 'rk-op-' + Date.now() + '.db');
+const srv = spawn('node', ['--disable-warning=ExperimentalWarning', 'server/index.js'], { env: { ...process.env, PORT: port, ROOKERY_DB: db, ROOKERY_ADMIN_USERNAME: 'Rookery' } });
+let pass = 0, fail = 0; const ok = (c, n) => { c ? pass++ : fail++; console.log(c ? 'PASS' : 'FAIL', n); };
+(async () => {
+  await new Promise((r) => setTimeout(r, 4000)); const b = await chromium.launch(); const errs = [];
+  const mk = async (name) => { const c = await b.newContext({ viewport: { width: 1000, height: 900 } }); await c.request.post(base + '/api/auth/register', { headers: { 'x-rookery': '1' }, data: { username: name, email: name + '@x.io', password: 'Passw0rd!long' } }); const p = await c.newPage(); p.on('pageerror', (e) => errs.push(e.message)); await p.goto(base + '/#/'); return p; };
+  const O = await mk('Rookery'), P = await mk('player9');
+  await O.waitForSelector('.owner-panel', { timeout: 8000 }); ok(true, 'owner sees the panel');
+  ok(await P.locator('.owner-panel').count() === 0, 'other players do not see it');
+  const box = await O.locator('.owner-panel').boundingBox(); ok(box.x < 30 && box.y + box.height > 800, 'panel sits in the bottom-left corner');
+  ok(await O.locator('.owner-panel').evaluate((e) => !e.classList.contains('min')), 'starts expanded');
+  await O.click('.op-head'); ok(await O.locator('.owner-panel.min').count() === 1 && !(await O.locator('.op-body').isVisible()), 'minimises to a bar');
+  const mb = await O.locator('.owner-panel').boundingBox(); ok(mb.height < 60, 'minimised bar is small (' + Math.round(mb.height) + 'px)');
+  await O.reload(); await O.waitForSelector('.owner-panel'); ok(await O.locator('.owner-panel.min').count() === 1, 'remembers it was minimised');
+  await O.click('.op-head'); await O.waitForSelector('.op-body input[aria-label="Announcement"]');
+  await O.fill('.op-body input[aria-label="Announcement"]', 'Server restarts at 6pm'); await O.click('.op-body button:has-text("Announce")');
+  await P.waitForSelector('#announce-banner', { timeout: 6000 }); ok(/Announcement: Server restarts at 6pm/.test(await P.textContent('#announce-banner')), 'players see the announcement as a top banner');
+  await P.click('#announce-banner button:has-text("OK")'); ok(await P.locator('#announce-banner').count() === 0, 'banner can be dismissed');
+  if (process.env.SHOT) await O.screenshot({ path: process.env.SHOT }); ok(errs.length === 0, 'no page errors ' + errs.join('|'));
+  console.log(`\n${pass} passed, ${fail} failed`); await b.close(); srv.kill(); process.exit(fail ? 1 : 0);
+})().catch((e) => { console.log('ERR', e.message); srv.kill(); process.exit(1); });

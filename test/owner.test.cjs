@@ -34,7 +34,7 @@ const call = async (cookie, method, u, b) => { const r = await fetch(`http://127
   t('ratings unchanged when unrated is set', !!end && (!end.ratingChange || (end.ratingChange.white.after == null && end.ratingChange.black.after == null)));
   const rt = await call(o.ck, 'POST', '/api/owner/users/player2/rating', { category: 'blitz', rating: 2222 }); const pm = await call(p2.ck, 'GET', '/api/me'); t('owner sets a rating', rt.s === 200 && pm.j.user.ratings.some((x) => x.category === 'blitz' && Math.round(x.rating) === 2222));
   const ac = await call(o.ck, 'POST', '/api/owner/users/player2/achievements', { all: true }); t('owner grants all achievements', ac.s === 200 && ac.j.granted >= 1);
-  const bc = await call(o.ck, 'POST', '/api/owner/broadcast', { text: 'hello all' }); const nt = await until(w2, (m) => m.t === 'notice' && /hello all/.test(m.text)); t('announcement reaches players', bc.s === 200 && !!nt);
+  const bc = await call(o.ck, 'POST', '/api/owner/broadcast', { text: 'hello all' }); const nt = await until(w2, (m) => m.t === 'announce' && /hello all/.test(m.text)); t('announcement reaches players', bc.s === 200 && !!nt);
   const kk = await call(o.ck, 'POST', '/api/owner/users/player2/kick'); const gone = await call(p2.ck, 'GET', '/api/me'); t('kick ends their session', kk.s === 200 && !gone.j.user);
   w1.send(JSON.stringify({ t: 'quick', initial: 600, inc: 0, rated: false })); const ab = await call(o.ck, 'POST', '/api/owner/games/abort-all'); t('abort-all works', ab.s === 200);
   const au = await call(o.ck, 'GET', '/api/admin/audit'); t('actions are in the audit log', au.j.log.some((x) => /owner:result/.test(x.action)));

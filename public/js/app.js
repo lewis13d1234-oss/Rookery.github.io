@@ -1,4 +1,5 @@
 import { h, $, clear, toast, avatar, spinner, errorBox, debounce } from './util.js';
+import { startOwnerPanel } from './owner-panel.js';
 import { state, get, post, refreshMe, loadPrefs, applyPrefs, setPrefs, connectWs, initGlobalHandlers, on, sendWs } from './api.js';
 
 // Native append()/prepend() stringify null/false; make optional children (cond ? node : null) safe everywhere.
@@ -101,6 +102,7 @@ async function boot() {
   initGlobalHandlers(navigate);
   connectWs();
   on('user', () => connectWs());
+  startOwnerPanel();
   window.addEventListener('hashchange', route);
   window.addEventListener('keydown', (e) => { if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) { e.preventDefault(); $('.search-input')?.focus(); } });
   route();
